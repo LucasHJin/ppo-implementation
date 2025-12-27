@@ -39,6 +39,8 @@ def parse_args():
         help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, cuda will be enabled by default")
+    parser.add_argument("--num-envs", type=int, default=1,
+        help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=128,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--gamma", type=float, default=0.99,
@@ -53,7 +55,7 @@ def parse_args():
     # optimizations (TO BE DONE LATER)
     
     args = parser.parse_args()
-    args.batch_size = int(args.num_steps)
+    args.batch_size = int(args.num_steps * args.num_envs)
     
     return args
 
@@ -66,4 +68,3 @@ def make_env(gym_id, seed):
         env.observation_space.seed(seed)
         return env
     return thunk
-
