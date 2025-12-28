@@ -109,37 +109,41 @@ class Agent(nn.Module):
 def collect_rollout(agent, envs, args, obs, actions, logprobs, dones, rewards, values):
     init_obs, _ = envs.reset()
     # keep track of observations + if it's done to progress the rollout (remember to convert to gpu)
-    next_obs = torch.Tensor(init_obs).to(device)  
-    next_done = torch.zeros(args.num_envs).to(device)
+    next_obs = torch.from_numpy(init_obs).to(device)
+    next_done = torch.zeros(args.num_envs, dtype=torch.bool, device=device)
+    reward_tensor = torch.empty(args.num_envs, dtype=torch.float32, device=device) # preallocate reward tensor 
     
-    for step in range(args.num_steps):
-        obs[step] = next_obs # for each step, you give it shape (envs, obs)
-        dones[step] = next_done # use done for bootstrapping
-        
-        # no gradient update -> just collecting data
-        with torch.no_grad():
-            action, logprob, _, value = agent.get_action_and_value(next_obs) # returns tensors
-            actions[step] = action
-            logprobs[step] = logprob
-            values[step] = value.flatten() # (num_envs, 1) -> (num_envs,)
+    # no gradient update -> just collecting data
+    with torch.no_grad():
+        for step in range(args.num_steps):
+            obs[step].copy_(next_obs) # for each step, you give it shape (envs, obs) - also use copy instead of =
+            dones[step].copy_(next_done) # use done for bootstrapping
             
-        # step through and repeat
-        next_obs, reward, terminated, truncated, info = envs.step(action.cpu().numpy()) # gym envs expect cpu
-        rewards[step] = torch.tensor(reward).to(device).flatten()
-        next_obs = torch.Tensor(next_obs).to(device)
-        next_done = torch.Tensor(np.logical_or(terminated, truncated)).to(device)
+            action, logprob, _, value = agent.get_action_and_value(next_obs) # returns tensors
+            actions[step].copy_(action)
+            logprobs[step].copy_(logprob)
+            values[step].copy_(value.flatten()) # (num_envs, 1) -> (num_envs,)
+                
+            # step through and repeat
+            next_obs, reward, terminated, truncated, info = envs.step(action.cpu().numpy()) # gym envs expect cpu
+            
+            reward_tensor.copy_(torch.from_numpy(reward).to(device).flatten())
+            rewards[step].copy_(reward_tensor)
+            
+            next_obs.copy_(torch.from_numpy(next_obs).to(device))
+            next_done.copy_(torch.from_numpy(np.logical_or(terminated, truncated)).to(device))
     
     return obs, actions, logprobs, dones, rewards, values
         
     
 def train(agent, envs, args):
     # predefine storage buffer -> for each step + env, store a specific piece of data (more efficient than lists)
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space).to(device)
-    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space, device=device)
+    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space, device=device)
+    logprobs = torch.zeros((args.num_steps, args.num_envs), device=device)
+    dones = torch.zeros((args.num_steps, args.num_envs), device=device)
+    rewards = torch.zeros((args.num_steps, args.num_envs), device=device)
+    values = torch.zeros((args.num_steps, args.num_envs), device=device)
     
     NUM_UPDATES = args.total_timesteps // args.batch_size
     
@@ -147,7 +151,7 @@ def train(agent, envs, args):
         # 2 phase loop
             # collect experience with current policy -> rollout
             # use experience to update policy + value function (actor + critic) -> compute advantage, update ppo
-        obs, actions, logprobs, dones, rewards, values = collect_rollout(agent, envs, arg, obs, actions, logprobs, dones, rewards, values)
+        obs, actions, logprobs, dones, rewards, values = collect_rollout(agent, envs, args, obs, actions, logprobs, dones, rewards, values)
     
 if __name__ == "__main__":
     args = parse_args()
