@@ -60,7 +60,7 @@ def parse_args():
     
     args = parser.parse_args()
     args.batch_size = int(args.num_steps * args.num_envs)
-    args.minibatch_size = int(args.num_steps // args.num_minibatches)
+    args.minibatch_size = int(args.batch_size // args.num_minibatches)
     
     return args
 
@@ -217,9 +217,6 @@ def train(agent, envs, args, optimizer):
         advantages, returns = compute_advantages(args, rewards, dones, values, next_value, next_done, args.gamma)
         
         ppo_update(agent, args, advantages, returns, logprobs, values, actions, obs, optimizer)
-        
-        avg_reward = rewards.sum(dim=0).mean().item()
-        print(f"Update {update}/{NUM_UPDATES} | Avg reward: {avg_reward:.2f}")
     
 if __name__ == "__main__":
     args = parse_args()
