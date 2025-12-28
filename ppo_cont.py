@@ -7,7 +7,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.distributions.categorical import Categorical
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -16,7 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser(prog="PPO implementation")
     
     # simplified
-    parser.add_argument("--gym-id", type=str, default="LunarLander-v3",
+    parser.add_argument("--gym-id", type=str, default="Pendulum-v1",
         help="the id of the gym environment")
     parser.add_argument("--learning-rate", type=float, default=2.5e-4,
         help="the learning rate of the optimizer")
@@ -66,13 +65,15 @@ def make_env(gym_id, seed):
 class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
-        self.actor = nn.Sequential(
+        # actor outputs mu + std for normal distribution
+        self.actor_mu = nn.Sequential(
             Agent.layer_optimization(nn.Linear(int(np.array(envs.single_observation_space.shape).prod()), 64)),
             nn.Tanh(),
             Agent.layer_optimization(nn.Linear(64, 64)),
             nn.Tanh(),
-            Agent.layer_optimization(nn.Linear(64, envs.single_action_space.n), std=0.01), # output logits for all possible actions
+            Agent.layer_optimization(nn.Linear(64, envs.single_action_space.shape[0]), std=0.01), # output logits for all possible actions
         )
+        self.log_std = nn.Parameter(torch.zeros(envs.single_action_space.shape[0])) # use log to always learn a positive value
         
         self.critic = nn.Sequential(
             Agent.layer_optimization(nn.Linear(int(np.array(envs.single_observation_space.shape).prod()), 64)), # flatten into total input features
@@ -88,11 +89,15 @@ class Agent(nn.Module):
         
     # for interacting with env + optimizing parameters
     def get_action_and_value(self, obs, action=None):
-        logits = self.actor(obs)
-        probs = Categorical(logits=logits)
+        # normal distribution instead of logits/prob
+        mu = self.actor_mu(obs)
+        std = torch.exp(self.log_std).expand_as(mu) # expand to match batch size
+        dist = torch.distributions.Normal(mu, std)
+
         if action is None:
-            action = probs.sample()
-        return action, probs.log_prob(action), probs.entropy(), self.critic(obs) # which action to take, clip ratio, exploration, advantages
+            action = dist.sample()
+            
+        return action, dist.log_prob(action).sum(-1),dist.entropy().sum(-1), self.critic(obs) # -1 -> add up all log probs into 1 value per obs
     
     @staticmethod
     def layer_optimization(layer, std=np.sqrt(2), bias=0.0):
@@ -152,14 +157,13 @@ def compute_advantages(args, rewards, dones, values, next_value, next_done, gamm
         
         return advantages, returns
             
-def ppo_update(agent, args, advantages, returns, logprobs, values, actions, obs, optimizer):
+def ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimizer):
     # flatten batch data (num_steps * num_envs, [optional data]) -> no time data needed
     b_obs = obs.reshape((-1,) + obs.shape[2:])
     b_actions = actions.reshape((-1,) + actions.shape[2:])
     b_logprobs = logprobs.reshape(-1)
     b_advantages = advantages.reshape(-1)
     b_returns = returns.reshape(-1)
-    b_values = values.reshape(-1)
     b_inds = np.arange(args.batch_size) # for shuffling + minibatch
     
     for epoch in range(args.update_epochs):
@@ -169,7 +173,7 @@ def ppo_update(agent, args, advantages, returns, logprobs, values, actions, obs,
             mb_inds = b_inds[start_idx:end_idx]
             
             # pass action back in to get new probability + value using new policy
-            _, new_logprob, entropy, new_value = agent.get_action_and_value(b_obs[mb_inds], b_actions.long()[mb_inds]) # long because logprob needs int
+            _, new_logprob, entropy, new_value = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds]) 
             ratio = (new_logprob - b_logprobs[mb_inds]).exp()
             
             # policy loss
@@ -215,7 +219,7 @@ def train(agent, envs, args, optimizer):
         with torch.no_grad():
             next_value = agent.get_value(next_obs).flatten()
         advantages, returns = compute_advantages(args, rewards, dones, values, next_value, next_done, args.gamma)
-        ppo_update(agent, args, advantages, returns, logprobs, values, actions, obs, optimizer)
+        ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimizer)
         
         # logging 
         global_step += args.batch_size
