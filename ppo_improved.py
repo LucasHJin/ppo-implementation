@@ -45,6 +45,8 @@ def parse_args():
         help="the number of mini-batches")
     
     # optimizations (TO BE DONE LATER)
+    parser.add_argument("--gae-lambda", type=float, default=0.95,
+        help="lambda for GAE")
     
     args = parser.parse_args()
     args.batch_size = int(args.num_steps * args.num_envs)
@@ -143,17 +145,22 @@ def collect_rollout(agent, envs, args, obs, actions, logprobs, dones, rewards, v
         
 def compute_advantages(args, rewards, dones, values, next_value, next_done, gamma):
     with torch.no_grad():
-        returns = torch.zeros_like(rewards, device=device)
+        advantages = torch.zeros_like(rewards, device=device)
+        running_adv = 0 # is a_t+1 when calculating a_t
+        
         for t in reversed(range(args.num_steps)): # need to reverse because we bootstrap based on future rewards
             if t == args.num_steps - 1:
                 next_nonterminal = 1.0 - next_done.to(dtype=torch.float32)
-                next_return = next_value # bootstrap extra value from critic
+                next_value_t = next_value
             else:
                 next_nonterminal = 1.0 - dones[t+1].to(dtype=torch.float32)
-                next_return = returns[t+1]
-                
-            returns[t] = rewards[t] + gamma * next_nonterminal * next_return # non terminal checks if we should add it in or already stopped
-        advantages = returns - values # compute once at the end
+                next_value_t = values[t+1]
+            
+            # TD error -> delta = reward + discount * existing value - current value
+            delta = rewards[t] + (args.gamma * next_nonterminal * next_value_t) - values[t] # non terminal checks if we should add it in or already stopped
+            # GAE -> advantage = change in value + discount * special factor * existing advantage (recursive) 
+            advantages[t] = running_adv = delta + args.gamma * args.gae_lambda * next_nonterminal * running_adv
+        returns = advantages + values # returns is target for value function
         
         return advantages, returns
             
