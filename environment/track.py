@@ -3,7 +3,7 @@ from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 
 class Track:
-    TRACK_WIDTH = 6.0
+    TRACK_WIDTH = 8.0
     
     def __init__(self):
         self.control_points = np.array([
@@ -18,12 +18,12 @@ class Track:
             [10, 20],
             [0, 10],
         ])
-        self.waypoints = self.generate_waypoints() # points to approximate location on track
-        self.normals = self.compute_normals()
+        self.waypoints = self.gen_waypoints() # points to approximate location on track
+        self.normals = self.calc_normals()
         self.left_boundary = self.waypoints + self.normals * Track.TRACK_WIDTH
         self.right_boundary = self.waypoints - self.normals * Track.TRACK_WIDTH
         
-    def generate_waypoints(self, factor=30):
+    def gen_waypoints(self, factor=30):
         # close points loop
         points = np.vstack((self.control_points, self.control_points[0]))
         
@@ -40,7 +40,7 @@ class Track:
         waypoints = np.column_stack((t_x, t_y))
         return waypoints
     
-    def compute_normals(self):
+    def calc_normals(self):
         tangents = np.diff(self.waypoints, axis=0, append=[self.waypoints[0]]) # vectors pointing between waypoints
         tangent_lengths = np.linalg.norm(tangents, axis=1, keepdims=True)
         tangent_lengths = np.where(tangent_lengths==0, 1, tangent_lengths) # get rid of div by 0
@@ -62,6 +62,27 @@ class Track:
         ax.set_aspect('equal') # equal axis scales
         
         plt.show()
+        
+    def closest_waypoint_idx(self, x, y):
+        idx = np.sum((self.waypoints - np.array((x, y))) ** 2, axis=1).argmin()
+        return int(idx)
+    
+    def get_start_pos(self):
+        dx = self.waypoints[1, 0]-self.waypoints[0, 0]
+        dy = self.waypoints[1, 1]-self.waypoints[0, 1]
+        return (self.waypoints[0, 0], self.waypoints[0, 1], np.arctan2(dy, dx)) # x, y, angle
+    
+    def calc_progress(self, x, y):
+        curr_idx = self.closest_waypoint_idx(x, y)
+        return curr_idx / len(self.waypoints)
+    
+    def check_collision(self, x, y):
+        idx = self.closest_waypoint_idx(x, y)
+        normal = self.normals[idx] # normal is normalized already 
+        pos_vector = np.array((x, y)) - self.waypoints[idx]
+        dist = abs(np.dot(pos_vector, normal)) # project position onto normal vector
+        return dist > Track.TRACK_WIDTH
+        
         
 track = Track()
 track.visualize()
