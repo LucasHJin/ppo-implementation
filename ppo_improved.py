@@ -166,13 +166,14 @@ def compute_advantages(args, rewards, dones, values, next_value, next_done, gamm
         
         return advantages, returns
             
-def ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimizer):
+def ppo_update(agent, args, advantages, returns, values, logprobs, actions, obs, optimizer):
     # flatten batch data (num_steps * num_envs, [optional data]) -> no time data needed
     b_obs = obs.reshape((-1,) + obs.shape[2:])
     b_actions = actions.reshape((-1,) + actions.shape[2:])
     b_logprobs = logprobs.reshape(-1)
     b_advantages = advantages.reshape(-1)
     b_returns = returns.reshape(-1)
+    b_values = values.reshape(-1)
     b_inds = np.arange(args.batch_size) # for shuffling + minibatch
     
     for epoch in range(args.update_epochs):
@@ -182,8 +183,8 @@ def ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimiz
             mb_inds = b_inds[start_idx:end_idx]
             
             # pass action back in to get new probability + value using new policy
-            _, new_logprob, entropy, new_value = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds]) 
-            ratio = (new_logprob - b_logprobs[mb_inds]).exp()
+            _, new_logprobs, entropy, new_values = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds]) 
+            ratio = (new_logprobs - b_logprobs[mb_inds]).exp()
             
             # policy loss
             # note -> signs in formula show you what to max + min (pytorch naturally minimizes)
@@ -193,9 +194,14 @@ def ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimiz
             pg_loss1 = -mb_advantages * ratio
             pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
             pg_loss = torch.max(pg_loss1, pg_loss2).mean() # mean averages E[] into single scalar
-            # value loss (minimize -> keep positive)
-            new_value = new_value.flatten()
-            v_loss = 0.5 * ((new_value - b_returns[mb_inds]) ** 2).mean()
+            
+            # value loss + clipping for critic (minimize -> keep positive)
+            new_values = new_values.flatten()
+            v_clip = b_values[mb_inds] + torch.clamp(new_values - b_values[mb_inds], -args.clip_coef, args.clip_coef) # same clip coef as policy clip
+            v_loss_unclipped = (new_values - b_returns[mb_inds]) ** 2
+            v_loss_clipped = (v_clip - b_returns[mb_inds]) ** 2
+            v_loss = 0.5 * torch.max(v_loss_unclipped, v_loss_clipped).mean()
+            
             #entropy loss
             e_loss = -entropy.mean()
             
@@ -232,7 +238,7 @@ def train(agent, envs, args, optimizer):
         with torch.no_grad():
             next_value = agent.get_value(next_obs).flatten()
         advantages, returns = compute_advantages(args, rewards, dones, values, next_value, next_done, args.gamma)
-        ppo_update(agent, args, advantages, returns, logprobs, actions, obs, optimizer)
+        ppo_update(agent, args, advantages, returns, values, logprobs, actions, obs, optimizer)
         
         # logging 
         global_step += args.batch_size
