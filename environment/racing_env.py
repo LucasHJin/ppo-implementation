@@ -14,7 +14,7 @@ class RacingEnv(gym.Env):
         
         # for step function
         self.steps = 0
-        self.progress = 0.0
+        self.last_progress = 0.0
         
         # [steering, throttle]
         self.action_space = gym.spaces.Box(
@@ -45,7 +45,8 @@ class RacingEnv(gym.Env):
             "position": (self.car.x, self.car.y),
             "speed": np.sqrt(self.car.vx ** 2 + self.car.vy ** 2),
             "progress": self.car.progress,
-            "crashed": self.car.crashed
+            "crashed": self.car.crashed,
+            "finished": self.car.finished
         }
         
     def reset(self, seed=None, options=None): # type: ignore
@@ -53,7 +54,7 @@ class RacingEnv(gym.Env):
         
         self.car.reset()
         self.steps = 0
-        self.progress = 0.0
+        self.last_progress = 0.0
         
         observation = self._get_obs()
         info = self._get_info()
@@ -61,4 +62,33 @@ class RacingEnv(gym.Env):
         return observation, info
     
     def step(self, action): # type: ignore
-        pass
+        # perform action
+        steering, throttle = action
+        self.car.update(steering, throttle)
+        self.steps += 1
+        
+        # reward shaping
+        progress_delta = self.car.progress - self.last_progress
+        speed = np.sqrt(self.car.vx**2 + self.car.vy**2)
+        reward = 0.0
+        reward += progress_delta * 20.0
+        reward += speed * 0.2
+        if self.last_progress > 0.9 and self.car.progress < 0.1:
+            reward += 50.0
+            self.car.finished = True
+        if self.car.crashed:
+            reward -= 100.0
+            
+        # get returns
+        observation = self._get_obs()
+        info = self._get_info()
+        info["reward"] = reward
+        info["progress_delta"] = progress_delta
+        info["speed"] = speed
+        terminated = self.car.crashed or self.car.finished
+        truncated = self.steps >= 1000
+        
+        # update progress
+        self.last_progress = self.car.progress
+        
+        return observation, reward, terminated, truncated, info
