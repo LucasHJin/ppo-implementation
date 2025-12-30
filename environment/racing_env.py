@@ -12,6 +12,10 @@ class RacingEnv(gym.Env):
         self.track = Track()
         self.car = Car(self.track)
         
+        # for step function
+        self.steps = 0
+        self.progress = 0.0
+        
         # [steering, throttle]
         self.action_space = gym.spaces.Box(
             low=np.array([-1.0, 0.0]),
@@ -44,8 +48,17 @@ class RacingEnv(gym.Env):
             "crashed": self.car.crashed
         }
         
-    def reset(self, seed=None, options=None):
-        pass
+    def reset(self, seed=None, options=None): # type: ignore
+        super().reset(seed=seed)
+        
+        self.car.reset()
+        self.steps = 0
+        self.progress = 0.0
+        
+        observation = self._get_obs()
+        info = self._get_info()
+        
+        return observation, info
     
-    def step(self, action):
+    def step(self, action): # type: ignore
         pass
