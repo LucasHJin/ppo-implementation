@@ -1,12 +1,12 @@
-def get_ppo_config():
-    return {
-        # Training
-        "total_timesteps": 500000,
-        "num_envs": 4,
+def hyperparams_config():
+    config = {
+        # training
+        "total_timesteps": 1000000,
+        "num_envs": 8,
         "num_steps": 2048,
-        "learning_rate": 3e-4,
+        "learning_rate": 1e-4,
         
-        # PPO specific
+        # ppo specific
         "gamma": 0.99,
         "gae_lambda": 0.95,
         "clip_coef": 0.2,
@@ -16,19 +16,13 @@ def get_ppo_config():
         "num_minibatches": 32,
         "max_grad_norm": 0.5,
         
-        # System
+        # system
         "seed": 1,
         "cuda": True,
         "torch_deterministic": True,
     }
-
-def get_racing_config():
-    config = get_ppo_config()
     
-    config.update({
-        "total_timesteps": 1000000, 
-        "num_envs": 8,
-        "learning_rate": 1e-4,
-    })
+    config["batch_size"] = config["num_steps"] * config["num_envs"]
+    config["minibatch_size"] = config["batch_size"] // config["num_minibatches"]
     
     return config

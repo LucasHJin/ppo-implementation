@@ -83,7 +83,6 @@ class PPO:
         def thunk():
             env = env_fn()
             env = gym.wrappers.RecordEpisodeStatistics(env)
-            # Note: RescaleAction not needed for RacingEnv (already correct range)
             env = gym.wrappers.NormalizeObservation(env)
             env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10), observation_space=env.observation_space)
             env.reset(seed=seed)
