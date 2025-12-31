@@ -9,6 +9,8 @@ class Car:
     DRAG = 0.95 # friction in forward direction
     LATERAL_FRICTION = 0.85 # friction in sideways direction (drift)
     GRIP = 0.9 # how much power can be exerted laterally (also drift)
+    LENGTH = 4.0
+    WIDTH = 2.0
     
     def __init__(self, track):
         self.track = track
@@ -22,6 +24,25 @@ class Car:
         self.progress = 0.0
         self.crashed = False
         self.finished = False
+    
+    def get_corners(self):
+        half_length = Car.LENGTH / 2
+        half_width = Car.WIDTH / 2
+        
+        # local frame
+        local_corners = np.array([
+            [half_length, half_width],
+            [half_length, -half_width],
+            [-half_length, -half_width],
+            [-half_length, half_width]
+        ])
+        
+        # convert to global frame with rotation matrix
+        cos_a = np.cos(self.angle)
+        sin_a = np.sin(self.angle)
+        rotation = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        world_corners = (rotation @ local_corners.T).T + np.array([self.x, self.y])
+        return world_corners
     
     def update(self, steering, throttle, dt=0.05):
         """
@@ -55,4 +76,4 @@ class Car:
         self.x = self.x + (self.vx * dt)
         self.y = self.y + (self.vy * dt)
         self.progress = self.track.calc_progress(self.x, self.y)
-        self.crashed = self.track.check_collision(self.x, self.y)
+        self.crashed = self.track.check_collision(self.get_corners())

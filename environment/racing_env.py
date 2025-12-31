@@ -6,15 +6,18 @@ from .car import Car
 # https://gymnasium.farama.org/introduction/create_custom_env/
 
 class RacingEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, num_sensors=11):
         super().__init__()
         
         self.track = Track()
         self.car = Car(self.track)
+        self.num_sensors = num_sensors
+        self.max_sensor_range = 50.0
         
         # for step function
         self.steps = 0
         self.last_progress = 0.0
+        self.last_steering = 0.0
         self.checkpoints = {
             0.25: False,
             0.50: False,
@@ -28,22 +31,47 @@ class RacingEnv(gym.Env):
             shape=(2,),
             dtype=np.float32
         )
-        # [vx, vy, angle, angular_velocity, progress]
+        # [sensor_distances, v_forward, v_lateral, angular_velocity, steering]
+        # ALL NORMALIZED -> [0, 1] or [-1, 1]
         self.observation_space = gym.spaces.Box(
-            low=np.float32(-np.inf),
-            high=np.float32(np.inf),
-            shape=(5,),
+            low=np.float32(-1.0),
+            high=np.float32(1.0),
+            shape=(num_sensors + 4,),
             dtype=np.float32
         ) 
         
+    def get_sensor_readings(self):
+        sensor_angles = np.linspace(-np.pi/2, np.pi/2, self.num_sensors) # front half of car
+        distances = np.zeros(self.num_sensors, dtype=np.float32)
+        origin = np.array([self.car.x, self.car.y])
+        
+        for i, relative_angle in enumerate(sensor_angles):
+            world_angle = self.car.angle + relative_angle
+            distances[i] = self.track.raycast(origin, world_angle, self.max_sensor_range)
+        
+        return distances / self.max_sensor_range # normalize 0-1
+        
     def _get_obs(self):
-        return np.array([
-            self.car.vx,
-            self.car.vy,
-            self.car.angle,
-            self.car.angular_velocity,
-            self.car.progress
-        ], dtype=np.float32)
+        sensor_readings = self.get_sensor_readings()
+        
+        # velocities in local car's frame
+        cos_angle = np.cos(self.car.angle)
+        sin_angle = np.sin(self.car.angle)
+        v_forward = self.car.vx * cos_angle + self.car.vy * sin_angle
+        v_lateral = -self.car.vx * sin_angle + self.car.vy * cos_angle
+        
+        # normalize to [-1, 1]
+        v_forward = np.clip(v_forward / Car.MAX_SPEED, -1.0, 1.0)
+        v_lateral = np.clip(v_lateral / Car.MAX_SPEED, -1.0, 1.0)
+        angular_velocity = np.clip(self.car.angular_velocity / Car.STEERING_SPEED, -1.0, 1.0)
+        steering = self.last_steering
+        
+        obs = np.concatenate([
+            sensor_readings,
+            [v_forward, v_lateral, angular_velocity, steering]
+        ])
+        
+        return obs.astype(np.float32)
     
     def _get_info(self):
         return {
@@ -60,6 +88,7 @@ class RacingEnv(gym.Env):
         self.car.reset()
         self.steps = 0
         self.last_progress = 0.0
+        self.last_steering = 0.0
         self.checkpoints = {
             0.25: False,
             0.50: False,
@@ -72,9 +101,10 @@ class RacingEnv(gym.Env):
         return observation, info
     
     def step(self, action): # type: ignore
-        # perform action (clip first)
+        # perform action (clip just in case)
         steering = float(np.clip(action[0], -1.0, 1.0)) 
         throttle = float(np.clip(action[1],  0.0, 1.0))
+        self.last_steering = steering
         self.car.update(steering, throttle)
         self.steps += 1
         
