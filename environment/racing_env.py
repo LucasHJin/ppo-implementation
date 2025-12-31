@@ -72,8 +72,9 @@ class RacingEnv(gym.Env):
         return observation, info
     
     def step(self, action): # type: ignore
-        # perform action
-        steering, throttle = action
+        # perform action (clip first)
+        steering = float(np.clip(action[0], -1.0, 1.0)) 
+        throttle = float(np.clip(action[1],  0.0, 1.0))
         self.car.update(steering, throttle)
         self.steps += 1
         
