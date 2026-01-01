@@ -2,3 +2,4 @@ venv/
 videos/
 __pycache__/
 models/
+data/

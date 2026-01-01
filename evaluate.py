@@ -6,7 +6,7 @@ from agent.ppo import Agent
 
 # change to pygame later on
 
-def eval(model_path="models/racing_agent.pth", num_episodes=3):
+def eval(model_path="models/single_agent.pth", num_episodes=3):
     # setup
     env = RacingEnv()
     track = env.track

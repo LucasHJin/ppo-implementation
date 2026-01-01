@@ -15,6 +15,7 @@ def hyperparams_config():
         "update_epochs": 10,
         "num_minibatches": 16,
         "max_grad_norm": 0.5,
+        "kl_target": 0.015,
         
         # system
         "seed": 1,

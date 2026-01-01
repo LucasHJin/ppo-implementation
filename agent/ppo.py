@@ -169,6 +169,13 @@ class PPO:
                 _, new_logprobs, entropy, new_values = self.agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds]) 
                 ratio = (new_logprobs - b_logprobs[mb_inds]).exp()
                 
+                # kl stopping
+                with torch.no_grad():
+                    approx_kl = (b_logprobs[mb_inds] - new_logprobs).mean()
+                    if approx_kl > c["kl_target"]:
+                        print(f"  Early stopping at epoch {epoch+1} due to KL divergence: {approx_kl:.4f}")
+                        return
+                
                 # policy loss
                 # note -> signs in formula show you what to max + min (pytorch naturally minimizes)
                 mb_advantages = b_advantages[mb_inds]
