@@ -86,13 +86,19 @@ class SelfPlayPPO(PPO):
         for update in range(NUM_UPDATES):
             # snapshot management
             if update > 0 and update % self.snapshot_freq == 0:
+                print(f"\n[Self-Play] Creating snapshot at update {update}")
                 snapshot = self.snapshot_agent()
                 self.opponent_pool.append(snapshot)
                 if len(self.opponent_pool) > self.pool_size: # too many opponents -> remove + cleanup
                     removed = self.opponent_pool.pop(0)
                     del removed
+                    print("[Self-Play] Removed oldest opponent (pool at max size)")
             # choose opponent
             self.update_opponent()
+            if self.curr_opponent is None:
+                print("[Self-Play] Training vs random opponent (pool empty)")
+            else:
+                print("[Self-Play] Training vs opponent from pool")
             
             # lr annealing
             frac = max(0.0, 1.0 - update / NUM_UPDATES) # clamp just in case because of floats
