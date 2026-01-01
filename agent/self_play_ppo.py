@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import gymnasium as gym
 import copy
-from ppo import PPO, Agent
+from .ppo import PPO, Agent
 from environment.multi_racing_env import MultiRacingEnv
 from environment.wrappers import SelfPlayWrapper
 

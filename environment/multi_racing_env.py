@@ -233,7 +233,7 @@ class MultiRacingEnv(gym.Env):
                 infos[f"{i}"]["placement"] = placement
         else:
             for i in range(self.num_agents):
-                infos[f"{i}"]["reward"] = rewards[i]
+                infos[f"{i}"]["reward"] = rewards[f"{i}"]
                 
         dones = {f"{i}": terminated for i in range(self.num_agents)}
         dones["__all__"] = terminated or truncated
