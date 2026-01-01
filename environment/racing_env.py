@@ -113,6 +113,10 @@ class RacingEnv(gym.Env):
             progress_delta = (1.0 - self.last_progress) + self.car.progress
         elif self.last_progress < 0.1 and self.car.progress > 0.9:
             progress_delta = -((1.0 - self.car.progress) + self.last_progress)
+            
+        # get returns
+        observation = self._get_obs()
+        info = self._get_info()
         
         # reward
         reward = 0.0
@@ -132,15 +136,19 @@ class RacingEnv(gym.Env):
             0.75 <= self.car.progress < 0.85):
             self.checkpoints[0.75] = True
             reward += 15
+        # speed reward
+        if not self.car.crashed and progress_delta > 0:
+            speed = info['speed']
+            speed_norm = speed / Car.MAX_SPEED
+            reward += speed_norm * 2.0
+        # time penalty
+        # reward -= 0.5 
         # finished track
         all_checkpoints_passed = all(self.checkpoints.values())
         if (all_checkpoints_passed and self.last_progress > 0.9 and self.car.progress < 0.1 and progress_delta > 0):
             self.car.finished = True
             reward += 100
             
-        # get returns
-        observation = self._get_obs()
-        info = self._get_info()
         info["reward"] = reward
         info["progress_delta"] = progress_delta
         terminated = self.car.crashed or self.car.finished
