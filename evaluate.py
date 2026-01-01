@@ -1,10 +1,13 @@
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
+import pygame
 from environment.racing_env import RacingEnv
 from agent.ppo import Agent
 
-# change to pygame later on
+def convert_coords(x, y, ox, oy, scale, screen_size):
+    screen_x = int((x + ox) * scale)
+    screen_y = int(screen_size - (y + oy) * scale)
+    return screen_x, screen_y
 
 def eval(model_path="models/single_agent.pth", num_episodes=3):
     # setup
@@ -17,32 +20,59 @@ def eval(model_path="models/single_agent.pth", num_episodes=3):
     agent.to(device)
     agent.eval()
     
+    # pygame setup
+    pygame.init()
+    all_points = np.vstack([track.left_boundary, track.right_boundary]) # track bounds for scaling
+    min_x, min_y = all_points.min(axis=0)
+    max_x, max_y = all_points.max(axis=0)
+    padding = 10
+    track_width = max_x - min_x
+    track_height = max_y - min_y
+    screen_size = 800
+    screen = pygame.display.set_mode((screen_size, screen_size))
+    clock = pygame.time.Clock()
+    scale = min(screen_size / (track_width + 2*padding), screen_size / (track_height + 2*padding))
+    offset_x = -min_x + padding
+    offset_y = -min_y + padding
+    left_points = [convert_coords(p[0], p[1], offset_x, offset_y, scale, screen_size) for p in track.left_boundary]
+    right_points = [convert_coords(p[0], p[1], offset_x, offset_y, scale, screen_size) for p in track.right_boundary]
+    track_polygon = left_points + right_points[::-1] + [left_points[0]]
+    start_left = convert_coords(
+        track.waypoints[0][0] + track.normals[0][0] * track.TRACK_WIDTH,
+        track.waypoints[0][1] + track.normals[0][1] * track.TRACK_WIDTH,
+        offset_x,
+        offset_y,
+        scale,
+        screen_size
+    )
+    start_right = convert_coords(
+        track.waypoints[0][0] - track.normals[0][0] * track.TRACK_WIDTH,
+        track.waypoints[0][1] - track.normals[0][1] * track.TRACK_WIDTH,
+        offset_x,
+        offset_y,
+        scale,
+        screen_size
+    )
+    
     print("Testing:")
-    print("-" * 50)
     
     for episode in range(num_episodes):
         obs, _ = env.reset()
         
-        # visualization setup
-        plt.ion()
-        fig, ax = plt.subplots(figsize=(10, 10))
-        waypoints_closed = np.vstack([track.waypoints, track.waypoints[0]])
-        left_closed = np.vstack([track.left_boundary, track.left_boundary[0]])
-        right_closed = np.vstack([track.right_boundary, track.right_boundary[0]])
-        ax.plot(waypoints_closed[:, 0], waypoints_closed[:, 1], 'b-', linewidth=2)
-        ax.plot(left_closed[:, 0], left_closed[:, 1], 'k-')
-        ax.plot(right_closed[:, 0], right_closed[:, 1], 'k-')
-        car_dot, = ax.plot([], [], 'ro', markersize=10)
-        car_arrow = ax.arrow(0, 0, 0, 0, head_width=1, head_length=1, fc='red', ec='red')
-        trail_line, = ax.plot([], [], 'r-', linewidth=1)
-        ax.set_aspect('equal')
-        
-        path_x = []
-        path_y = []
+        path_points = []
         total_reward = 0
-
+        running = True
+        
         # run episodes
         for step in range(2000):
+            for event in pygame.event.get(): # handle quit
+                if event.type == pygame.QUIT:
+                    running = False
+                    break
+            
+            if not running:
+                break
+            
             # get action and step
             with torch.no_grad():
                 obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(device)
@@ -52,34 +82,49 @@ def eval(model_path="models/single_agent.pth", num_episodes=3):
             total_reward += reward
             
             # update visualization
+            screen.fill((50, 50, 50))
+            pygame.draw.polygon(screen, (180, 180, 180), track_polygon)
+            pygame.draw.lines(screen, (0, 0, 0), True, left_points, 4)
+            pygame.draw.lines(screen, (0, 0, 0), True, right_points, 4)
+            pygame.draw.line(screen, (0, 255, 0), start_left, start_right, 5)
             car = env.car
-            path_x.append(car.x)
-            path_y.append(car.y)
-            car_dot.set_data([car.x], [car.y])
-            trail_line.set_data(path_x, path_y)
-            car_arrow.remove()
-            arrow_length = 3
-            car_arrow = ax.arrow(
-                car.x, car.y,
-                arrow_length * np.cos(car.angle),
-                arrow_length * np.sin(car.angle),
-                head_width=1, head_length=1, fc='red', ec='red'
-            )
-            ax.set_title(f'Episode {episode+1} | Step {step} | Progress: {info["progress"]:.1%} | '
-                        f'Speed: {info["speed"]:.1f} | Reward: {total_reward:.0f}')
+            path_points.append(convert_coords(car.x, car.y, offset_x, offset_y, scale, screen_size))
+            if len(path_points) > 1:
+                pygame.draw.lines(screen, (255, 100, 100), False, path_points, 3)  # Red trail
+            corners = car.get_corners()
+            car_screen_points = [convert_coords(c[0], c[1], offset_x, offset_y, scale, screen_size) for c in corners]
+            pygame.draw.polygon(screen, (255, 0, 0), car_screen_points)  # Red car
+            pygame.draw.polygon(screen, (150, 0, 0), car_screen_points, 2)  # Dark red outline
+            font = pygame.font.Font(None, 30)
+            info_text = [
+                f"Episode: {episode + 1}/{num_episodes}",
+                f"Step: {step}",
+                f"Progress: {info['progress']:.1%}",
+                f"Speed: {info['speed']:.1f}",
+                f"Reward: {total_reward:.0f}"
+            ]
             
-            plt.pause(0.01) # use for animation
+            text_offset = 10
+            for text in info_text:
+                text_surface = font.render(text, True, (255, 255, 255))
+                screen.blit(text_surface, (10, text_offset))
+                text_offset += 25
+                
+            pygame.display.flip()
+            clock.tick(60)
             
             # if stop
             if terminated or truncated:
                 reason = "Finished" if info['finished'] else "Crashed" if info['crashed'] else "Time limit"
                 print(f"Episode {episode+1}: {reason} | Steps: {step} | "
                       f"Reward: {total_reward:.1f} | Progress: {info['progress']:.1%}")
-                plt.pause(3) 
+                pygame.time.wait(3000)
                 break
         
-        plt.ioff()
-        plt.close()
+        if not running:
+            break
+    
+    pygame.quit()
 
 
 if __name__ == "__main__":
