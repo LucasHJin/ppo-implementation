@@ -8,16 +8,125 @@ from environment.wrappers import SelfPlayWrapper
 
 class SelfPlayPPO(PPO):
     def __init__(self, env_fn, config, device="cuda"):
-        pass
+        self.env_fn = env_fn
+        # self play configs
+        self.opponent_pool = []
+        self.curr_opponent = None
+        self.snapshot_freq = config["snapshot_freq"]
+        self.pool_size = config["pool_size"]
+        
+        super().__init__(env_fn, config, device) 
+    
+    def _make_env(self, env_fn, seed):
+        def thunk():
+            multi_env = self.env_fn()
+            env = SelfPlayWrapper(multi_env, 0) # initialize base ppo with wrapped env for 1 agent processing
+            env.set_opponent(self.curr_opponent)
+            env = gym.wrappers.RecordEpisodeStatistics(env)
+            env.reset(seed=seed)
+            env.action_space.seed(seed)
+            env.observation_space.seed(seed)
+            return env
+        return thunk
     
     def snapshot_agent(self):
-        pass
+        snapshot = Agent(self.envs.single_observation_space, self.envs.single_action_space).to(self.device) # new agent with same architecture
+        snapshot.load_state_dict(copy.deepcopy(self.agent.state_dict())) # deep copy over weights (inner objects as well)
+        # no training
+        snapshot.eval() 
+        for param in snapshot.parameters():
+            param.requires_grad = False
+        return snapshot
     
     def select_opponent(self):
-        pass
+        if not self.opponent_pool:
+            return None
+        
+        return np.random.choice(self.opponent_pool)
     
-    def update_opponent_in_envs(self):
-        pass
+    def update_opponent(self):
+        self.curr_opponent = self.select_opponent()
+        # make new envs for this rollout with new opponent
+        self.envs.close() 
+        self.envs = gym.vector.SyncVectorEnv([self._make_env(self.env_fn, self.config["seed"] + i) for i in range(self.config["num_envs"])])
     
     def train(self):
-        pass
+        import json # for saving training info
+        
+        c = self.config
+        
+        # type check -> make sure not none
+        obs_shape = self.envs.single_observation_space.shape
+        action_shape = self.envs.single_action_space.shape
+        assert obs_shape is not None, "Observation space has no shape"
+        assert action_shape is not None, "Action space has no shape"
+        
+        # predefine storage buffer -> for each step + env, store a specific piece of data (more efficient than lists)
+        obs = torch.zeros((c["num_steps"], c["num_envs"]) + tuple(obs_shape), device=self.device)
+        actions = torch.zeros((c["num_steps"], c["num_envs"]) + tuple(action_shape), device=self.device)
+        logprobs = torch.zeros((c["num_steps"], c["num_envs"]), device=self.device)
+        dones = torch.zeros((c["num_steps"], c["num_envs"]), device=self.device)
+        rewards = torch.zeros((c["num_steps"], c["num_envs"]), device=self.device)
+        values = torch.zeros((c["num_steps"], c["num_envs"]), device=self.device)
+        
+        init_obs, _ = self.envs.reset()
+        # keep track of observations + if it's done to progress the rollout (remember to convert to gpu)
+        next_obs = torch.from_numpy(init_obs).to(self.device)
+        next_done = torch.zeros(c["num_envs"], dtype=torch.bool, device=self.device)
+        
+        NUM_UPDATES = c["total_timesteps"] // c["batch_size"]
+        global_step = 0
+        
+        training_info = {
+            'steps': [],
+            'rewards': [],
+            'opponent_pool_size': []
+        }
+        
+        for update in range(NUM_UPDATES):
+            # snapshot management
+            if update > 0 and update % self.snapshot_freq == 0:
+                snapshot = self.snapshot_agent()
+                self.opponent_pool.append(snapshot)
+                if len(self.opponent_pool) > self.pool_size: # too many opponents -> remove + cleanup
+                    removed = self.opponent_pool.pop(0)
+                    del removed
+            # choose opponent
+            self.update_opponent()
+            
+            # lr annealing
+            frac = max(0.0, 1.0 - update / NUM_UPDATES) # clamp just in case because of floats
+            new_lr = frac * c["learning_rate"]
+            self.optimizer.param_groups[0]["lr"] = new_lr
+            
+            # 2 phase loop
+                # collect experience with current policy -> rollout
+                # use experience to update policy + value function (actor + critic) -> compute advantage, update ppo
+            obs, actions, logprobs, dones, rewards, values, next_obs, next_done, episode_info = self.collect_rollout(obs, actions, logprobs, dones, rewards, values, next_obs, next_done)
+            with torch.no_grad():
+                next_value = self.agent.get_value(next_obs).flatten()
+                
+            advantages, returns = self.compute_advantages(rewards, dones, values, next_value, next_done)
+            self.ppo_update(advantages, returns, values, logprobs, actions, obs)
+            
+            # logging 
+            global_step += c["batch_size"]
+            if episode_info:
+                mean_reward = np.mean([ep["reward"] for ep in episode_info])
+                mean_length = np.mean([ep["length"] for ep in episode_info])
+                training_info['steps'].append(global_step)
+                training_info['rewards'].append(float(mean_reward))
+                training_info['opponent_pool_size'].append(len(self.opponent_pool))
+                print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | Episodes: {len(episode_info)} | "
+                      f"Mean Reward: {mean_reward:.2f} | Mean Length: {mean_length:.2f} | Pool Size: {len(self.opponent_pool)}")
+            else:
+                print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
+                
+        try:
+            with open("/cache/training_info_time.json", 'w') as f:
+                json.dump(training_info, f)
+            print("\nTraining data saved to /cache/training_info.json")
+        except Exception as e:
+            print(f"Warning: Could not save data: {e}")
+            
+        self.envs.close()
