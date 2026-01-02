@@ -160,6 +160,10 @@ class MultiRacingEnv(gym.Env):
         reward = 0.0
         # main signal -> reward progress 
         reward += progress_delta * 250
+        # speed signal
+        speed = np.sqrt(car.vx ** 2 + car.vy ** 2)
+        speed_ratio = np.clip(speed / MultiCar.MAX_SPEED, 0.0, 1.0)
+        reward += speed_ratio * 2
         # checkpoints to ensure no initial reward hacking
         if (not data['checkpoints'][0.25] and 0.25 <= car.progress < 0.35):
             data['checkpoints'][0.25] = True
@@ -178,7 +182,7 @@ class MultiRacingEnv(gym.Env):
             reward += 100
         # crash penalty
         if car.crashed:
-            reward -= 50
+            reward -= 30
         
         return reward
     
@@ -201,7 +205,7 @@ class MultiRacingEnv(gym.Env):
         # perform action (clip just in case)
         for idx, car in enumerate(self.cars):
             steering = float(np.clip(actions[f"{idx}"][0], -1.0, 1.0)) 
-            throttle = float(np.clip(actions[f"{idx}"][1],  0.0, 1.0))
+            throttle = float(np.clip((actions[f"{idx}"][1] + 1.0) / 2.0, 0.0, 1.0))
             self.agents_data[idx]['last_steering'] = steering
             car.update(steering, throttle)
             
@@ -209,10 +213,10 @@ class MultiRacingEnv(gym.Env):
         for i in range(self.num_agents):
             for j in range(i + 1, self.num_agents):
                 if self.cars[i].check_car_collision([self.cars[j]]):
-                    self.cars[i].vx *= 0.85
-                    self.cars[i].vy *= 0.85
-                    self.cars[j].vx *= 0.85
-                    self.cars[j].vy *= 0.85
+                    self.cars[i].vx *= 0.92
+                    self.cars[i].vy *= 0.92
+                    self.cars[j].vx *= 0.92
+                    self.cars[j].vy *= 0.92
                 
         self.steps += 1
         

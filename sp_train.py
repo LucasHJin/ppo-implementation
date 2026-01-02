@@ -77,7 +77,7 @@ def train():
     print(f"{'='*60}\n")
     
     # save final model
-    final_path = "/cache/self_play_agent.pth"
+    final_path = "/cache/self_play_agent_final.pth"
     trainer.save(final_path)
     print(f"Final model saved to {final_path}")
     

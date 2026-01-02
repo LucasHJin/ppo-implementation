@@ -42,11 +42,13 @@ class Agent(nn.Module):
     def get_action_and_value(self, obs, action=None):
         # normal distribution instead of logits/prob
         mu = self.actor_mu(obs)
-        std = torch.exp(self.log_std).expand_as(mu) # expand to match batch size
+        log_std_clamped = torch.clamp(self.log_std, -2.0, 0.5) # clamp to prevent out of bounds
+        std = torch.exp(log_std_clamped).expand_as(mu) # expand to match batch size
         dist = torch.distributions.Normal(mu, std)
 
         if action is None:
             action = dist.sample()
+            action = torch.clamp(action, -1.0, 1.0)
             
         return action, dist.log_prob(action).sum(-1), dist.entropy().sum(-1), self.critic(obs) # -1 -> add up all log probs into 1 value per obs
     
