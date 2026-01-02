@@ -118,10 +118,20 @@ class MultiRacingEnv(gym.Env):
     def reset(self, seed=None, options=None): # type: ignore
         super().reset(seed=seed)
         
+        # prep for start position calcs 
+        start_pos = self.track.waypoints[0]
+        start_normal = self.track.normals[0]
+        spacing = MultiCar.WIDTH + 1.0
+        center = (self.num_agents - 1) / 2.0
+        
         for i, car in enumerate(self.cars):
             car.reset()
-            if i > 0:
-                car.y += i * (MultiCar.WIDTH + 0.5) # stagger starting position
+            
+            offset_index = i - center
+            offset = offset_index * spacing
+
+            car.x = start_pos[0] + start_normal[0] * offset
+            car.y = start_pos[1] + start_normal[1] * offset
         
         self.steps = 0
         for idx in range(len(self.cars)):

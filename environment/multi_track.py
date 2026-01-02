@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 class MultiTrack:
-    TRACK_WIDTH = 4.0
+    TRACK_WIDTH = 5.0
     
     def __init__(self):
         self.control_points = np.array([
