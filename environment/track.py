@@ -1,26 +1,91 @@
 import numpy as np
 from scipy.interpolate import CubicSpline
 
+def gen_random_track(num_points=15, base_radius=50, radius_variation=15, angle_jitter=0.2, smoothness=0.5, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+        
+    # generate angles with some discrepancies in spacing
+    angles = np.linspace(0, 2*np.pi, num_points, endpoint=False)
+    if angle_jitter > 0:
+        angle_spacing = 2*np.pi / num_points
+        angle_offsets = np.random.uniform(
+            -angle_jitter * angle_spacing / 2,
+            angle_jitter * angle_spacing / 2,
+            num_points
+        )
+        angles = angles + angle_offsets
+        angles = np.sort(angles % (2*np.pi)) # keep in 0-2π and sorted
+
+    # generate random radius for how in/out they are from the circle + smoothing (how close to previous point)
+    radii = np.zeros(num_points)
+    for i in range(num_points):
+        variation = np.random.uniform(-radius_variation, radius_variation)
+        if smoothness > 0:
+            prev_idx = (i - 1) % num_points
+            if i == 0:
+                radii[i] = base_radius + variation
+            else:
+                # smooth with previous point
+                neighbor_avg = radii[prev_idx]
+                radii[i] = (1 - smoothness) * (base_radius + variation) + (smoothness * neighbor_avg) # weighted average between new radius and previous radius
+        else:
+            radii[i] = base_radius + variation
+    
+    # smooth first point at the end
+    if smoothness > 0:
+        radii[0] = (radii[0] + radii[-1]) / 2
+    
+    # change to carteiian coords
+    control_points = np.column_stack([
+        radii * np.cos(angles),
+        radii * np.sin(angles)
+    ])
+    
+    return control_points
+
+def gen_tracks(num_tracks=10, seed=None):
+    tracks = []
+    for _ in range(num_tracks):
+        num_points = np.random.randint(10, 16)
+        base_radius = np.random.randint(60, 95)
+        max_variation = min(20, base_radius // 4)
+        radius_variation = np.random.randint(10, max_variation)
+        angle_jitter = np.random.uniform(0.2, 0.5)
+        smoothness = np.random.uniform(0.4, 0.8)
+        tracks.append(gen_random_track(num_points, base_radius, radius_variation, angle_jitter, smoothness, seed))
+    return tracks
+
 class Track:
     track_width = 4.0
     
-    def __init__(self):
-        self.control_points = np.array([
-            [0, 0],
-            [50, 0],
-            [70, 20],
-            [60, 40],
-            [70, 50],
-            [50, 70],
-            [20, 70],
-            [10, 50],
-            [10, 20],
-            [0, 10],
-        ])
+    def __init__(self, control_points=None, track_width=None):
+        if control_points is None:
+            self.control_points = np.array([
+                [0, 0], [50, 0], [70, 20], [60, 40],
+                [70, 50], [50, 70], [20, 70], [10, 50],
+                [10, 20], [0, 10],
+            ])
+        else:
+            self.control_points = control_points
+        if track_width is not None:
+            self.track_width = track_width
+        else:
+            self.track_width = 6.0
         self.waypoints = self.gen_waypoints() # points to approximate location on track
+        self.track_bounds = {
+            'min_x': self.waypoints[:, 0].min(),
+            'max_x': self.waypoints[:, 0].max(),
+            'min_y': self.waypoints[:, 1].min(),
+            'max_y': self.waypoints[:, 1].max(),
+        }
+        self.max_track_distance = np.sqrt(
+            (self.track_bounds['max_x'] - self.track_bounds['min_x'])**2 +
+            (self.track_bounds['max_y'] - self.track_bounds['min_y'])**2
+        )
         self.normals = self.calc_normals()
-        self.left_boundary = self.waypoints + self.normals * Track.track_width
-        self.right_boundary = self.waypoints - self.normals * Track.track_width
+        self.left_boundary = self.waypoints + self.normals * self.track_width
+        self.right_boundary = self.waypoints - self.normals * self.track_width
         self.left_segments = self.gen_segments(self.left_boundary)
         self.right_segments = self.gen_segments(self.right_boundary)
         self.segment_cache = {} # segment cache for vectorized raycasting
@@ -95,7 +160,7 @@ class Track:
             normal = self.normals[idx] # normal is normalized already 
             pos_vector = corner - self.waypoints[idx]
             dist = abs(np.dot(pos_vector, normal)) # project position onto normal vector
-            if dist > Track.track_width:
+            if dist > self.track_width:
                 return True
         return False
     

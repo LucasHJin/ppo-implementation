@@ -29,7 +29,7 @@ def train():
     sys.path.insert(0, "/root") # for importing local code
     
     from environment.multi_racing_env import MultiRacingEnv
-    from environment.multi_track import gen_tracks
+    from environment.track import gen_tracks
     from agent.self_play_ppo import SelfPlayPPO
     from configs.self_play_config import hyperparams_config
     

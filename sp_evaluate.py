@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pygame
 from environment.multi_racing_env import MultiRacingEnv
-from environment.multi_track import gen_tracks
+from environment.track import gen_tracks
 from agent.ppo import Agent
 
 def convert_coords(x, y, ox, oy, scale, screen_size):
