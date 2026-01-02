@@ -29,6 +29,7 @@ def train():
     sys.path.insert(0, "/root") # for importing local code
     
     from environment.multi_racing_env import MultiRacingEnv
+    from environment.multi_track import gen_tracks
     from agent.self_play_ppo import SelfPlayPPO
     from configs.self_play_config import hyperparams_config
     
@@ -42,6 +43,11 @@ def train():
     
     config = hyperparams_config()
     set_seed(config["seed"])
+    
+    print("Generating track pool")
+    TRACK_POOL = gen_tracks(num_tracks=config["num_envs"], seed=config["seed"])
+    TRACK_WIDTHS = [np.random.randint(4, 10) for _ in range(config["num_envs"])]
+    TRACK_ASSIGNMENTS = [i for i in range(config["num_envs"])]
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"{'='*60}")
@@ -57,8 +63,9 @@ def train():
     print(f"{'='*60}\n")
     
     # factory function -> separate vectorized envs
-    def env_fn():
-        return MultiRacingEnv(num_agents=2, num_sensors=11)
+    def env_fn(env_idx):
+        track_id = TRACK_ASSIGNMENTS[env_idx]
+        return MultiRacingEnv(num_agents=2, num_sensors=11, track_pool=TRACK_POOL, track_id=track_id, track_width=TRACK_WIDTHS)
     trainer = SelfPlayPPO(env_fn, config, device=device)
     
     print(f"\n{'='*60}")

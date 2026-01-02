@@ -1,22 +1,83 @@
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-class MultiTrack:
-    TRACK_WIDTH = 5.0
+def gen_random_track(num_points=15, base_radius=50, radius_variation=15, angle_jitter=0.2, smoothness=0.5, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+        
+    # generate angles with some discrepancies in spacing
+    angles = np.linspace(0, 2*np.pi, num_points, endpoint=False)
+    if angle_jitter > 0:
+        angle_spacing = 2*np.pi / num_points
+        angle_offsets = np.random.uniform(
+            -angle_jitter * angle_spacing / 2,
+            angle_jitter * angle_spacing / 2,
+            num_points
+        )
+        angles = angles + angle_offsets
+        angles = np.sort(angles % (2*np.pi)) # keep in 0-2π and sorted
+
+    # generate random radius for how in/out they are from the circle + smoothing (how close to previous point)
+    radii = np.zeros(num_points)
+    for i in range(num_points):
+        variation = np.random.uniform(-radius_variation, radius_variation)
+        if smoothness > 0:
+            prev_idx = (i - 1) % num_points
+            if i == 0:
+                radii[i] = base_radius + variation
+            else:
+                # smooth with previous point
+                neighbor_avg = radii[prev_idx]
+                radii[i] = (1 - smoothness) * (base_radius + variation) + (smoothness * neighbor_avg) # weighted average between new radius and previous radius
+        else:
+            radii[i] = base_radius + variation
     
-    def __init__(self):
-        self.control_points = np.array([
-            [0, 0],
-            [50, 0],
-            [70, 20],
-            [60, 40],
-            [70, 50],
-            [50, 70],
-            [20, 70],
-            [10, 50],
-            [10, 20],
-            [0, 10],
-        ])
+    # smooth first point at the end
+    if smoothness > 0:
+        radii[0] = (radii[0] + radii[-1]) / 2
+    
+    # change to carteiian coords
+    control_points = np.column_stack([
+        radii * np.cos(angles),
+        radii * np.sin(angles)
+    ])
+    
+    return control_points
+
+def gen_tracks(num_tracks=10, seed=None):
+    tracks = []
+    for _ in range(num_tracks):
+        num_points = np.random.randint(8, 21)
+        base_radius = np.random.randint(50, 110)
+        radius_variation = np.random.randint(15, base_radius // 2 - 5)
+        angle_jitter = np.random.default_rng().uniform(0.1, 0.7)
+        smoothness = np.random.default_rng().uniform(0.1, 0.8)
+        tracks.append(gen_random_track(num_points, base_radius, radius_variation, angle_jitter, smoothness, seed))
+    return tracks
+
+class MultiTrack:
+    def __init__(self, track_pool=None, track_id=None, track_width=None):
+        if track_pool is not None:
+            if track_id is None:
+                track_id = np.random.randint(0, len(track_pool))
+            self.control_points = track_pool[track_id]
+        else:
+            self.control_points = np.array([
+                [0, 0], 
+                [50, 0], 
+                [70, 20], 
+                [60, 40],
+                [70, 50], 
+                [50, 70], 
+                [20, 70], 
+                [10, 50],
+                [10, 20], 
+                [0, 10],
+            ])
+        if track_width is not None:
+            self.track_width = track_width[track_id] 
+        else:
+            self.track_width = 5.0
         self.waypoints = self.gen_waypoints() # points to approximate location on track
         self.track_bounds = {
             'min_x': self.waypoints[:, 0].min(),
@@ -29,8 +90,8 @@ class MultiTrack:
             (self.track_bounds['max_y'] - self.track_bounds['min_y'])**2
         )
         self.normals = self.calc_normals()
-        self.left_boundary = self.waypoints + self.normals * MultiTrack.TRACK_WIDTH
-        self.right_boundary = self.waypoints - self.normals * MultiTrack.TRACK_WIDTH
+        self.left_boundary = self.waypoints + self.normals * self.track_width
+        self.right_boundary = self.waypoints - self.normals * self.track_width
         self.left_segments = self.gen_segments(self.left_boundary)
         self.right_segments = self.gen_segments(self.right_boundary)
         self.segment_cache = {} # segment cache for vectorized raycasting
@@ -105,7 +166,7 @@ class MultiTrack:
             normal = self.normals[idx] # normal is normalized already 
             pos_vector = corner - self.waypoints[idx]
             dist = abs(np.dot(pos_vector, normal)) # project position onto normal vector
-            if dist > MultiTrack.TRACK_WIDTH:
+            if dist > self.track_width:
                 return True
         return False
     
@@ -178,45 +239,3 @@ class MultiTrack:
     
         return float(np.min(t[hit_mask])) # return min
     
-    def gen_random_track(self, num_points=15, base_radius=70, radius_variation=20, angle_jitter=0.2, smoothness=0.5, seed=None):
-        if seed is not None:
-            np.random.seed(seed)
-            
-        # generate angles with some discrepancies in spacing
-        angles = np.linspace(0, 2*np.pi, num_points, endpoint=False)
-        if angle_jitter > 0:
-            angle_spacing = 2*np.pi / num_points
-            angle_offsets = np.random.uniform(
-                -angle_jitter * angle_spacing / 2,
-                angle_jitter * angle_spacing / 2,
-                num_points
-            )
-            angles = angles + angle_offsets
-            angles = np.sort(angles % (2*np.pi)) # keep in 0-2π and sorted
-    
-        # generate random radius for how in/out they are from the circle + smoothing (how close to previous point)
-        radii = np.zeros(num_points)
-        for i in range(num_points):
-            variation = np.random.uniform(-radius_variation, radius_variation)
-            if smoothness > 0:
-                prev_idx = (i - 1) % num_points
-                if i == 0:
-                    radii[i] = base_radius + variation
-                else:
-                    # smooth with previous point
-                    neighbor_avg = radii[prev_idx]
-                    radii[i] = (1 - smoothness) * (base_radius + variation) + (smoothness * neighbor_avg) # weighted average between new radius and previous radius
-            else:
-                radii[i] = base_radius + variation
-        
-        # smooth first point at the end
-        if smoothness > 0:
-            radii[0] = (radii[0] + radii[-1]) / 2
-        
-        # change to carteiian coords
-        control_points = np.column_stack([
-            radii * np.cos(angles),
-            radii * np.sin(angles)
-        ])
-        
-        return control_points

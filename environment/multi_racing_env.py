@@ -6,10 +6,10 @@ from .multi_car import MultiCar
 # https://gymnasium.farama.org/introduction/create_custom_env/
 
 class MultiRacingEnv(gym.Env):
-    def __init__(self, num_agents=2, num_sensors=11):
+    def __init__(self, num_agents=2, num_sensors=11, track_pool=None, track_id=None, track_width=None):
         super().__init__()
         
-        self.track = MultiTrack()
+        self.track = MultiTrack(track_pool=track_pool, track_id=track_id, track_width=track_width)
         self.num_agents = num_agents
         self.cars = [MultiCar(self.track) for _ in range(num_agents)]
         self.num_sensors = num_sensors

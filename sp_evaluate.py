@@ -41,16 +41,16 @@ def eval(model_path="models/self_play_agent.pth", num_episodes=3):
     right_points = [convert_coords(p[0], p[1], offset_x, offset_y, scale, screen_size) for p in track.right_boundary]
     track_polygon = left_points + right_points[::-1] + [left_points[0]]
     start_left = convert_coords(
-        track.waypoints[0][0] + track.normals[0][0] * track.TRACK_WIDTH,
-        track.waypoints[0][1] + track.normals[0][1] * track.TRACK_WIDTH,
+        track.waypoints[0][0] + track.normals[0][0] * track.track_width,
+        track.waypoints[0][1] + track.normals[0][1] * track.track_width,
         offset_x,
         offset_y,
         scale,
         screen_size
     )
     start_right = convert_coords(
-        track.waypoints[0][0] - track.normals[0][0] * track.TRACK_WIDTH,
-        track.waypoints[0][1] - track.normals[0][1] * track.TRACK_WIDTH,
+        track.waypoints[0][0] - track.normals[0][0] * track.track_width,
+        track.waypoints[0][1] - track.normals[0][1] * track.track_width,
         offset_x,
         offset_y,
         scale,
@@ -126,8 +126,8 @@ def eval(model_path="models/self_play_agent.pth", num_episodes=3):
             info_text = [
                 f"Episode: {episode + 1}/{num_episodes}",
                 f"Step: {step}",
-                f"Car 0 (Red)  - Progress: {info_dict['0']['progress']:.1%}, Reward: {total_reward_0:.0f}",
-                f"Car 1 (Blue) - Progress: {info_dict['1']['progress']:.1%}, Reward: {total_reward_1:.0f}",
+                f"Car 0 (Red)  - Progress: {info_dict['0']['progress']:.1%}, Speed: {info_dict['0']['speed']:.1f}, Reward: {total_reward_0:.0f}",
+                f"Car 1 (Blue) - Progress: {info_dict['1']['progress']:.1%}, Speed: {info_dict['1']['speed']:.1f}, Reward: {total_reward_1:.0f}",
             ]
             
             text_offset = 10
@@ -138,6 +138,9 @@ def eval(model_path="models/self_play_agent.pth", num_episodes=3):
                 
             pygame.display.flip()
             clock.tick(60)
+            
+            print(f"Car 0 action: steering={action_0[0]:.2f}, throttle={action_0[1]:.2f}")
+            print(f"Car 1 action: steering={action_1[0]:.2f}, throttle={action_1[1]:.2f}")
             
             # if stop
             if done_dict["__all__"]:

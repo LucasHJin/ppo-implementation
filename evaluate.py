@@ -38,16 +38,16 @@ def eval(model_path="models/single_agent.pth", num_episodes=3):
     right_points = [convert_coords(p[0], p[1], offset_x, offset_y, scale, screen_size) for p in track.right_boundary]
     track_polygon = left_points + right_points[::-1] + [left_points[0]]
     start_left = convert_coords(
-        track.waypoints[0][0] + track.normals[0][0] * track.TRACK_WIDTH,
-        track.waypoints[0][1] + track.normals[0][1] * track.TRACK_WIDTH,
+        track.waypoints[0][0] + track.normals[0][0] * track.track_width,
+        track.waypoints[0][1] + track.normals[0][1] * track.track_width,
         offset_x,
         offset_y,
         scale,
         screen_size
     )
     start_right = convert_coords(
-        track.waypoints[0][0] - track.normals[0][0] * track.TRACK_WIDTH,
-        track.waypoints[0][1] - track.normals[0][1] * track.TRACK_WIDTH,
+        track.waypoints[0][0] - track.normals[0][0] * track.track_width,
+        track.waypoints[0][1] - track.normals[0][1] * track.track_width,
         offset_x,
         offset_y,
         scale,

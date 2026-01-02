@@ -3,7 +3,6 @@ import torch
 import gymnasium as gym
 import copy
 from .ppo import PPO, Agent
-from environment.multi_racing_env import MultiRacingEnv
 from environment.wrappers import SelfPlayWrapper
 
 class SelfPlayPPO(PPO):
@@ -17,9 +16,9 @@ class SelfPlayPPO(PPO):
         
         super().__init__(env_fn, config, device) 
     
-    def _make_env(self, env_fn, seed):
+    def _make_env(self, env_fn, seed, env_idx=0):
         def thunk():
-            multi_env = self.env_fn()
+            multi_env = self.env_fn(env_idx)
             env = SelfPlayWrapper(multi_env, 0) # initialize base ppo with wrapped env for 1 agent processing
             env.set_opponent(self.curr_opponent)
             env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -48,7 +47,7 @@ class SelfPlayPPO(PPO):
         self.curr_opponent = self.select_opponent()
         # make new envs for this rollout with new opponent
         self.envs.close() 
-        self.envs = gym.vector.SyncVectorEnv([self._make_env(self.env_fn, self.config["seed"] + i) for i in range(self.config["num_envs"])])
+        self.envs = gym.vector.SyncVectorEnv([self._make_env(self.env_fn, self.config["seed"] + i, env_idx=i) for i in range(self.config["num_envs"])])
     
     def train(self):
         import json # for saving training info

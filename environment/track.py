@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 class Track:
-    TRACK_WIDTH = 4.0
+    track_width = 4.0
     
     def __init__(self):
         self.control_points = np.array([
@@ -19,8 +19,8 @@ class Track:
         ])
         self.waypoints = self.gen_waypoints() # points to approximate location on track
         self.normals = self.calc_normals()
-        self.left_boundary = self.waypoints + self.normals * Track.TRACK_WIDTH
-        self.right_boundary = self.waypoints - self.normals * Track.TRACK_WIDTH
+        self.left_boundary = self.waypoints + self.normals * Track.track_width
+        self.right_boundary = self.waypoints - self.normals * Track.track_width
         self.left_segments = self.gen_segments(self.left_boundary)
         self.right_segments = self.gen_segments(self.right_boundary)
         self.segment_cache = {} # segment cache for vectorized raycasting
@@ -95,7 +95,7 @@ class Track:
             normal = self.normals[idx] # normal is normalized already 
             pos_vector = corner - self.waypoints[idx]
             dist = abs(np.dot(pos_vector, normal)) # project position onto normal vector
-            if dist > Track.TRACK_WIDTH:
+            if dist > Track.track_width:
                 return True
         return False
     
