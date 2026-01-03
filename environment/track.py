@@ -47,19 +47,25 @@ def gen_random_track(num_points=15, base_radius=50, radius_variation=15, angle_j
 def gen_tracks(num_tracks=10, seed=None):
     tracks = []
     for _ in range(num_tracks):
-        num_points = np.random.randint(10, 16)
-        base_radius = np.random.randint(60, 95)
-        max_variation = min(20, base_radius // 4)
-        radius_variation = np.random.randint(10, max_variation)
-        angle_jitter = np.random.uniform(0.2, 0.5)
-        smoothness = np.random.uniform(0.4, 0.8)
+        num_points = np.random.randint(10, 20)
+        base_radius = np.random.randint(50, 95)
+        radius_variation = np.random.randint(15, base_radius // 2 - 5)
+        angle_jitter = np.random.uniform(0.1, 0.8)
+        smoothness = np.random.uniform(0.1, 0.8)
         tracks.append(gen_random_track(num_points, base_radius, radius_variation, angle_jitter, smoothness, seed))
     return tracks
 
 class Track:
     track_width = 4.0
     
-    def __init__(self, control_points=None, track_width=None):
+    def __init__(self, control_points=None, track_width=None, track_pool=None, track_id=None):
+        if track_pool is not None:
+            if track_id is None:
+                track_id = np.random.randint(0, len(track_pool))
+            control_points = track_pool[track_id]
+            if track_width is not None and isinstance(track_width, list):
+                track_width = track_width[track_id]
+                
         if control_points is None:
             self.control_points = np.array([
                 [0, 0], [50, 0], [70, 20], [60, 40],

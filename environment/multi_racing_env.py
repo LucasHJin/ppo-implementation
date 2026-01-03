@@ -163,7 +163,9 @@ class MultiRacingEnv(gym.Env):
         # speed signal
         speed = np.sqrt(car.vx ** 2 + car.vy ** 2)
         speed_ratio = np.clip(speed / MultiCar.MAX_SPEED, 0.0, 1.0)
-        reward += speed_ratio * 8.0
+        if speed < 7.0:
+            reward -= 0.2
+        reward += speed_ratio * 10.0
         # checkpoints to ensure no initial reward hacking
         if (not data['checkpoints'][0.25] and 0.25 <= car.progress < 0.35):
             data['checkpoints'][0.25] = True

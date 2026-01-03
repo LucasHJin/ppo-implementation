@@ -2,19 +2,6 @@ import numpy as np
 from .track import Track
 
 class MultiTrack(Track):
-    def __init__(self, track_pool=None, track_id=None, track_width=None):
-        if track_pool is not None:
-            if track_id is None:
-                track_id = np.random.randint(0, len(track_pool))
-            control_points = track_pool[track_id]
-            width = track_width[track_id] if track_width is not None else 5.0
-        else:
-            control_points = None
-            width = None
-        
-        # initalize parent Track with selected parameters
-        super().__init__(control_points, width)
-    
     def raycast_with_cars(self, origin, direction, cars, max_dist=50.0):
         wall_dist = self.raycast(origin, direction, max_dist)
         ray_dir = np.array([np.cos(direction), np.sin(direction)])
