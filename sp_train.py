@@ -71,13 +71,13 @@ def train():
     print(f"\n{'='*60}")
     print("Starting training")
     print(f"{'='*60}\n")
-    trainer.train(resume_from="/cache/checkpoint_update_90.pth")
+    trainer.train()
     print(f"\n{'='*60}")
     print("Training Complete!")
     print(f"{'='*60}\n")
     
     # save final model
-    final_path = "/cache/self_play_agent_final.pth"
+    final_path = "/cache/self_play_agent_final_speed2.pth"
     trainer.save(final_path)
     print(f"Final model saved to {final_path}")
     
