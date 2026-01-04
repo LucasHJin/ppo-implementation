@@ -3,7 +3,7 @@ import numpy as np
 import json
 from pathlib import Path
 from utils.visualization import visualize_single_agent, visualize_multi_agent
-from utils.metrics import eval_single_agent, eval_multi_agent
+from utils.metrics import eval_single_agent, eval_multi_agent, display_comparison
 from environment.track import gen_tracks
 from environment.racing_env import RacingEnv
 from environment.multi_racing_env import MultiRacingEnv
@@ -28,10 +28,10 @@ def evaluate_single_agent(track_pool, track_widths, device, model, num_tracks=20
                 track_id=track_idx,
                 track_width=track_widths
             )
-            #if run_idx == 0 and track_idx == 0:
-            #    metrics = visualize_single_agent(env, agent, device, "videos/single_agent_eval.mp4")
-            #else:
-            metrics = eval_single_agent(env, agent, device)
+            if run_idx == 0 and track_idx == 0:
+                metrics = visualize_single_agent(env, agent, device, "videos/single_agent_eval.mp4")
+            else:
+                metrics = eval_single_agent(env, agent, device)
             all_metrics.append(metrics)
     
     # aggregate stats
@@ -121,23 +121,31 @@ def eval():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # configs
     num_tracks = 1
-    num_runs = 3
+    num_runs = 1
     seed = 42
     # generate tracks
     track_pool = gen_tracks(num_tracks=num_tracks, seed=seed)
     track_widths = [np.random.RandomState(seed + i).randint(4, 10) 
                     for i in range(num_tracks)]
     
-    single_results = evaluate_single_agent(track_pool, track_widths, device, "models/single_agent.pth", num_tracks, num_runs)
-    #multi_results = evaluate_multi_agent(track_pool, track_widths, device, "models/self_play_agent.pth", num_tracks, num_runs)
+    #single_results = evaluate_single_agent(track_pool, track_widths, device, "models/single_agent.pth", num_tracks, num_runs)
+    multi_results = evaluate_multi_agent(track_pool, track_widths, device, "models/self_play_agent.pth", num_tracks, num_runs)
 
     Path("results").mkdir(exist_ok=True)
-    with open("data/single_agent_results.json", "w") as f:
-        json.dump(single_results, f, indent=2)
-    #with open("data/multi_agent_results.json", "w") as f:
-    #    json.dump(multi_results, f, indent=2)
+    #with open("data/single_agent_results.json", "w") as f:
+    #    json.dump(single_results, f, indent=2)
+    with open("data/multi_agent_results.json", "w") as f:
+        json.dump(multi_results, f, indent=2)
     
     print("\nResults saved to data/ directory")
+    
+    # for the training eval
+    ROOT = Path(__file__).resolve().parent.parent
+    data = {
+        "Baseline": json.load(open(ROOT / "data" / "single_agent.json")),
+        "+ Speed": json.load(open(ROOT / "data" / "single_agent_speed.json")),
+        "+ Time": json.load(open(ROOT / "data" / "single_agent_time.json")),
+    }
 
 if __name__ == "__main__":
     eval()
