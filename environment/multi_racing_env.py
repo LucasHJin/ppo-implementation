@@ -159,29 +159,24 @@ class MultiRacingEnv(gym.Env):
         
         reward = 0.0
         # main signal -> reward progress 
-        reward += progress_delta * 150
+        reward += progress_delta * 200
         # checkpoints to ensure no initial reward hacking
         if (not data['checkpoints'][0.25] and 0.25 <= car.progress < 0.35):
             data['checkpoints'][0.25] = True
-            reward += 30
         if (data['checkpoints'][0.25] and not data['checkpoints'][0.50] and 0.50 <= car.progress < 0.60):
             data['checkpoints'][0.50] = True
-            reward += 30
         if (data['checkpoints'][0.50] and not data['checkpoints'][0.75] and 0.75 <= car.progress < 0.85):
             data['checkpoints'][0.75] = True
-            reward += 30
         # finished track
         all_checkpoints_passed = all(data['checkpoints'].values())
         if (all_checkpoints_passed and data['last_progress'] > 0.9 and car.progress < 0.1 and progress_delta > 0):
             car.finished = True
             data['finished_step'] = self.steps
-            reward += 175
-            time_bonus = max(0, 150 - (self.steps / 10))
+            time_bonus = max(0, 200 - (self.steps / 10))
             reward += time_bonus
         # crash penalty
         if car.crashed:
-            reward -= 50
-        reward -= 0.15
+            reward -= 100
         
         return reward
     
