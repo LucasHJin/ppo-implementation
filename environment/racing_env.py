@@ -115,8 +115,7 @@ class RacingEnv(gym.Env):
             progress_delta = -((1.0 - self.car.progress) + self.last_progress)
             
         # get returns
-        observation = self._get_obs()
-        info = self._get_info()
+        
         
         # reward
         reward = 0.0
@@ -151,8 +150,15 @@ class RacingEnv(gym.Env):
             time_bonus = max(0, 100 - (self.steps / 6)) 
             reward += time_bonus
             
+        # get info after so that finished is updated
+        observation = self._get_obs()
+        info = self._get_info()
+            
         info["reward"] = reward
         info["progress_delta"] = progress_delta
+        if self.car.finished:
+            info['progress'] = 1.0
+
         terminated = self.car.crashed or self.car.finished
         truncated = self.steps >= 3000
         

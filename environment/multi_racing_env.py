@@ -160,31 +160,28 @@ class MultiRacingEnv(gym.Env):
         reward = 0.0
         # main signal -> reward progress 
         reward += progress_delta * 150
-        # speed signal
-        speed = np.sqrt(car.vx ** 2 + car.vy ** 2)
-        speed_ratio = np.clip(speed / MultiCar.MAX_SPEED, 0.0, 1.0)
-        if speed < 7.0:
-            reward -= 0.2
-        reward += speed_ratio * 10.0
         # checkpoints to ensure no initial reward hacking
         if (not data['checkpoints'][0.25] and 0.25 <= car.progress < 0.35):
             data['checkpoints'][0.25] = True
-            reward += 15
+            reward += 30
         if (data['checkpoints'][0.25] and not data['checkpoints'][0.50] and 0.50 <= car.progress < 0.60):
             data['checkpoints'][0.50] = True
-            reward += 15
+            reward += 30
         if (data['checkpoints'][0.50] and not data['checkpoints'][0.75] and 0.75 <= car.progress < 0.85):
             data['checkpoints'][0.75] = True
-            reward += 15
+            reward += 30
         # finished track
         all_checkpoints_passed = all(data['checkpoints'].values())
         if (all_checkpoints_passed and data['last_progress'] > 0.9 and car.progress < 0.1 and progress_delta > 0):
             car.finished = True
             data['finished_step'] = self.steps
             reward += 175
+            time_bonus = max(0, 150 - (self.steps / 10))
+            reward += time_bonus
         # crash penalty
         if car.crashed:
-            reward -= 30
+            reward -= 50
+        reward -= 0.15
         
         return reward
     
@@ -230,6 +227,9 @@ class MultiRacingEnv(gym.Env):
             rewards[f"{i}"] = self.calc_reward(i)
             observations[f"{i}"] = self._get_obs(i)
             infos[f"{i}"] = self._get_info(i)
+            
+            if self.cars[i].finished:
+                infos[f"{i}"]['progress'] = 1.0
         
         any_finished = any(car.finished for car in self.cars)
         all_crashed = all(car.crashed for car in self.cars)
