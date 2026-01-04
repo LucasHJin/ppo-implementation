@@ -4,7 +4,7 @@ class Car:
     MAX_SPEED = 30.0
     ACCELERATION = 10.0
     STEERING_SPEED = 3.0
-    DRAG = 0.95 # friction in forward direction
+    DRAG = 0.985 # friction in forward direction
     LATERAL_FRICTION = 0.85 # friction in sideways direction (drift)
     GRIP = 0.9 # how much power can be exerted laterally (also drift)
     LENGTH = 4.0
