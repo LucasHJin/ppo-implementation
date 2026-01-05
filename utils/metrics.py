@@ -149,4 +149,4 @@ def display_comparison(results_files, labels, output_path):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.show()
 
-display_comparison(["results/single_agent_results.json", "results/multi_agent_results.json"], ["Single", "Multi"], "data/comparison.png")
+#display_comparison(["results/single_agent_results.json", "results/multi_agent_results.json"], ["Single", "Multi"], "data/comparison.png")

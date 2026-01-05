@@ -1,7 +1,7 @@
 def hyperparams_config():
     config = {
         # training
-        "total_timesteps": 500000,
+        "total_timesteps": 3000000,
         "num_envs": 16,
         "num_steps": 2048,
         "learning_rate": 3e-4,
@@ -18,8 +18,8 @@ def hyperparams_config():
         "kl_target": 0.03,
         
         # self play
-        "snapshot_freq": 3,
-        "pool_size": 4,
+        "snapshot_freq": 12,
+        "pool_size": 3,
         
         # system
         "seed": 1,

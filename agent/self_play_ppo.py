@@ -145,7 +145,7 @@ class SelfPlayPPO(PPO):
             # logging 
             global_step += c["batch_size"]
             
-            if update > 0 and update % 30 == 0:
+            if update > 0 and update % 10 == 0:
                 checkpoint = {
                     'update': update,
                     'global_step': global_step,
@@ -157,7 +157,7 @@ class SelfPlayPPO(PPO):
                     'config': self.config,
                     'training_info': training_info,
                 }
-                torch.save(checkpoint, f"/cache/checkpoint_update_{update}.pth")
+                torch.save(checkpoint, f"models/checkpoint_update_{update}.pth")
                 print("Saved full checkpoint")
             
             if episode_info:
@@ -172,9 +172,9 @@ class SelfPlayPPO(PPO):
                 print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
                 
         try:
-            with open("/cache/training_info_self_play_final.json", 'w') as f:
+            with open("/data/training_info_self_play_final.json", 'w') as f:
                 json.dump(training_info, f)
-            print("\nTraining data saved to /cache/training_info_self_play_final.json")
+            print("\nTraining data saved to /data/training_info_self_play_final.json")
         except Exception as e:
             print(f"Warning: Could not save data: {e}")
             

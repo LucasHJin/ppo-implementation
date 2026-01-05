@@ -51,6 +51,9 @@ def train():
     print(f"{'='*60}\n")
     
     # save final model
-    final_path = "/models/self_play_agent_local1.pth"
+    final_path = "models/self_play_agent_local.pth"
     trainer.save(final_path)
     print(f"Final model saved to {final_path}")
+    
+if __name__ == "__main__":
+    train()
