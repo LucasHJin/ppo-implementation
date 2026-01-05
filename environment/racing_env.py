@@ -114,40 +114,38 @@ class RacingEnv(gym.Env):
         elif self.last_progress < 0.1 and self.car.progress > 0.9:
             progress_delta = -((1.0 - self.car.progress) + self.last_progress)
             
-        # get returns
-        
-        
         # reward
         reward = 0.0
         # main signal -> reward progress 
-        reward = progress_delta * 250
+        reward = progress_delta * 200
         # checkpoints to ensure no initial reward hacking
         if (not self.checkpoints[0.25] and 0.25 <= self.car.progress < 0.35):
             self.checkpoints[0.25] = True
-            reward += 15
+            reward += 20 
         if (self.checkpoints[0.25] and 
             not self.checkpoints[0.50] and 
             0.50 <= self.car.progress < 0.60):
             self.checkpoints[0.50] = True
-            reward += 15
+            reward += 20
         if (self.checkpoints[0.50] and 
             not self.checkpoints[0.75] and 
             0.75 <= self.car.progress < 0.85):
             self.checkpoints[0.75] = True
-            reward += 15
+            reward += 20
         # speed reward
-        '''if not self.car.crashed and progress_delta > 0:
-            speed = info['speed']
-            speed_norm = speed / Car.MAX_SPEED
-            reward += speed_norm * 2.0'''
-        # time penalty
-        reward -= 0.2
+        if not self.car.crashed and progress_delta > 0:
+            speed = np.sqrt(self.car.vx ** 2 + self.car.vy ** 2)
+            speed_ratio = np.clip(speed / Car.MAX_SPEED, 0.0, 1.0)
+            reward += speed_ratio * 8.0
+        # crash penalty
+        if self.car.crashed: # need to make sure you only crash once
+            reward -= 40
         # finished track
         all_checkpoints_passed = all(self.checkpoints.values())
         if (all_checkpoints_passed and self.last_progress > 0.9 and self.car.progress < 0.1 and progress_delta > 0):
             self.car.finished = True
             reward += 100
-            time_bonus = max(0, 100 - (self.steps / 6)) 
+            time_bonus = max(0, 200 - (self.steps / 10)) 
             reward += time_bonus
             
         # get info after so that finished is updated
