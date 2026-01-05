@@ -106,6 +106,29 @@ def eval_multi_agent(env, agent, device, max_steps=3000):
         'steps': step + 1
     }
     
+def eval_sb3_agent(env, model, max_steps=2000):
+    obs, _ = env.reset()
+    total_reward = 0
+    step = 0
+    info = {}
+    
+    for step in range(max_steps):
+        action, states = model.predict(obs, deterministic=True)
+        obs, reward, terminated, truncated, info = env.step(action)
+        total_reward += reward
+        
+        if terminated or truncated:
+            break
+    
+    return {
+        'total_reward': total_reward,
+        'steps': step + 1,
+        'progress': info['progress'],
+        'finished': info['finished'],
+        'crashed': info['crashed'],
+        'speed': info['speed']
+    }
+    
 def display_comparison(results_files, labels, output_path):
     all_results = []
     for file in results_files:

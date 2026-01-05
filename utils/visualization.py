@@ -311,3 +311,101 @@ def visualize_multi_agent(env, agent, device, video_path, max_steps=3000):
         'placement': info_dict[chosen_idx].get('placement', None),
         'steps': step + 1
     }
+    
+def visualize_sb3_agent(env, model, video_path, max_steps=2000):
+    """Visualize SB3 model (similar to single agent but uses model.predict)"""
+    # setup
+    track = env.track
+    
+    # pygame setup (redo for each env)
+    pygame.init()
+    screen_size = 800
+    screen = pygame.display.set_mode((screen_size, screen_size))
+    clock = pygame.time.Clock()
+    
+    viz = setup_track_visualization(track, screen_size)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # type: ignore
+    video_writer = cv2.VideoWriter(video_path, fourcc, 60, (screen_size, screen_size))
+    
+    obs, _ = env.reset()
+    path_points = []
+    total_reward = 0
+    running = True
+    step = 0
+    info = {}
+    
+    # run episode
+    for step in range(max_steps):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                break
+        
+        if not running:
+            break
+        
+        # get action and step
+        action, _states = model.predict(obs, deterministic=True)
+        obs, reward, terminated, truncated, info = env.step(action)
+        total_reward += reward
+        
+        # update visualization
+        screen.fill((50, 50, 50))
+        pygame.draw.polygon(screen, (180, 180, 180), viz['track_polygon'])
+        pygame.draw.lines(screen, (0, 0, 0), True, viz['left_points'], 4)
+        pygame.draw.lines(screen, (0, 0, 0), True, viz['right_points'], 4)
+        pygame.draw.line(screen, (0, 255, 0), viz['start_left'], viz['start_right'], 5)
+        car = env.car
+        path_points.append(convert_coords(
+            car.x, car.y, viz['offset_x'], viz['offset_y'], viz['scale'], screen_size
+        ))
+        if len(path_points) > 1:
+            pygame.draw.lines(screen, (255, 100, 100), False, path_points, 3)
+        corners = car.get_corners()
+        car_screen_points = [
+            convert_coords(c[0], c[1], viz['offset_x'], viz['offset_y'], viz['scale'], screen_size) 
+            for c in corners
+        ]
+        pygame.draw.polygon(screen, (255, 0, 0), car_screen_points)
+        pygame.draw.polygon(screen, (150, 0, 0), car_screen_points, 2)
+        
+        font = pygame.font.Font(None, 30)
+        info_text = [
+            f"Step: {step}",
+            f"Progress: {info['progress']:.1%}",
+            f"Speed: {info['speed']:.1f}",
+            f"Reward: {total_reward:.0f}"
+        ]
+        text_offset = 10
+        for text in info_text:
+            text_surface = font.render(text, True, (255, 255, 255))
+            screen.blit(text_surface, (10, text_offset))
+            text_offset += 25
+        
+        pygame.display.flip()
+        
+        frame = pygame.surfarray.array3d(screen)
+        frame = np.transpose(frame, (1, 0, 2))
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        video_writer.write(frame)
+        
+        clock.tick(60)
+        
+        # if stop
+        if terminated or truncated:
+            reason = "Finished" if info['finished'] else "Crashed" if info['crashed'] else "Time limit"
+            print(f"{reason} | Steps: {step} | Reward: {total_reward:.1f} | Progress: {info['progress']:.1%}")
+            pygame.time.wait(3000)
+            break
+    
+    video_writer.release()
+    pygame.quit()
+    
+    return {
+        'total_reward': total_reward,
+        'steps': step + 1,
+        'progress': info['progress'],
+        'finished': info['finished'],
+        'crashed': info['crashed'],
+        'speed': info['speed']
+    }
