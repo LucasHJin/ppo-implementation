@@ -15,7 +15,7 @@ def hyperparams_config():
         "update_epochs": 10,
         "num_minibatches": 16,
         "max_grad_norm": 0.5,
-        "kl_target": 0.03,
+        "kl_target": 0.02,
         
         # self play
         "snapshot_freq": 12,

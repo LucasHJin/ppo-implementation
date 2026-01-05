@@ -64,7 +64,7 @@ class PPO:
         self.config = config
         self.device = torch.device(device if torch.cuda.is_available() and config["cuda"] else "cpu")
         
-        self.envs = gym.vector.SyncVectorEnv([self._make_env(env_fn, config["seed"] + i) for i in range(config["num_envs"])])
+        self.envs = gym.vector.SyncVectorEnv([self._make_env(env_fn, config["seed"] + i, i) for i in range(config["num_envs"])])
         
         # seed the values for reproducibility
         random.seed(config["seed"])
@@ -79,9 +79,9 @@ class PPO:
         
         self.optimizer = optim.Adam(self.agent.parameters(), lr=config["learning_rate"], eps=1e-5)
     
-    def _make_env(self, env_fn, seed):
+    def _make_env(self, env_fn, seed, env_idx):
         def thunk():
-            env = env_fn()
+            env = env_fn(env_idx)
             env = gym.wrappers.RecordEpisodeStatistics(env)
             #env = gym.wrappers.NormalizeObservation(env)
             #env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs, -10, 10), observation_space=env.observation_space)
@@ -266,9 +266,9 @@ class PPO:
                 print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
                 
         try:
-            with open("/cache/training_info_self_play.json", 'w') as f:
+            with open("/cache/training_info_single.json", 'w') as f:
                 json.dump(training_info, f)
-            print("\nTraining data saved to /cache/training_info_self_play.json")
+            print("\nTraining data saved to /cache/training_info_single.json")
         except Exception as e:
             print(f"Warning: Could not save data: {e}")
     
