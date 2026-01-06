@@ -172,9 +172,9 @@ class SelfPlayPPO(PPO):
                 print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
                 
         try:
-            with open("/data/training_info_self_play_final.json", 'w') as f:
+            with open("data/training_info_self_play_final.json", 'w') as f:
                 json.dump(training_info, f)
-            print("\nTraining data saved to /data/training_info_self_play_final.json")
+            print("\nTraining data saved to data/training_info_self_play_final.json")
         except Exception as e:
             print(f"Warning: Could not save data: {e}")
             

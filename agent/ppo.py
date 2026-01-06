@@ -17,21 +17,23 @@ class Agent(nn.Module):
         
         # actor outputs mu + std for normal distribution
         self.actor_mu = nn.Sequential(
-            Agent.layer_optimization(nn.Linear(obs_dim, 256)),
+            Agent.layer_optimization(nn.Linear(obs_dim, 64)),
             nn.Tanh(),
-            Agent.layer_optimization(nn.Linear(256, 256)),
+            Agent.layer_optimization(nn.Linear(64, 64)),
             nn.Tanh(),
-            Agent.layer_optimization(nn.Linear(256, action_dim), std=0.01), # output logits for all possible actions
+            Agent.layer_optimization(nn.Linear(64, action_dim), std=0.01), # output logits for all possible actions
             nn.Tanh(), # bound to (-1, 1)
         )
-        self.log_std = nn.Parameter(torch.zeros(action_dim)) # use log to always learn a positive value
+        #self.log_std = nn.Parameter(torch.ones(action_dim) * -1.5) # use log to always learn a positive value (need smaller log std)
+        self.register_buffer('log_std', torch.zeros(action_dim))
+        self.log_std: torch.Tensor
         
         self.critic = nn.Sequential(
-            Agent.layer_optimization(nn.Linear(obs_dim, 256)), # flatten into total input features
+            Agent.layer_optimization(nn.Linear(obs_dim, 64)), # flatten into total input features
             nn.Tanh(),
-            Agent.layer_optimization(nn.Linear(256, 256)),
+            Agent.layer_optimization(nn.Linear(64, 64)),
             nn.Tanh(),
-            Agent.layer_optimization(nn.Linear(256, 1), std=1.0),
+            Agent.layer_optimization(nn.Linear(64, 1), std=1.0),
         )
         
     # for advantage calcs
@@ -42,8 +44,9 @@ class Agent(nn.Module):
     def get_action_and_value(self, obs, action=None):
         # normal distribution instead of logits/prob
         mu = self.actor_mu(obs)
-        log_std_clamped = torch.clamp(self.log_std, -2.0, 0.5) # clamp to prevent out of bounds
-        std = torch.exp(log_std_clamped).expand_as(mu) # expand to match batch size
+        #log_std_clamped = torch.clamp(self.log_std, -2.0, -0.5) # clamp to prevent out of bounds (prevent too much noise while learning)
+        #std = torch.exp(log_std_clamped).expand_as(mu) # expand to match batch size
+        std = torch.exp(self.log_std).expand_as(mu)
         dist = torch.distributions.Normal(mu, std)
 
         if action is None:
@@ -243,6 +246,12 @@ class PPO:
             new_lr = frac * c["learning_rate"]
             self.optimizer.param_groups[0]["lr"] = new_lr
             
+            # log std annealing
+            start_log_std = -0.5
+            end_log_std = -1.6
+            current_log_std = frac * start_log_std + (1 - frac) * end_log_std
+            self.agent.log_std.data.fill_(current_log_std)
+            
             # 2 phase loop
                 # collect experience with current policy -> rollout
                 # use experience to update policy + value function (actor + critic) -> compute advantage, update ppo
@@ -266,9 +275,9 @@ class PPO:
                 print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
                 
         try:
-            with open("/cache/training_info_single.json", 'w') as f:
+            with open("data/training_info_single.json", 'w') as f:
                 json.dump(training_info, f)
-            print("\nTraining data saved to /cache/training_info_single.json")
+            print("\nTraining data saved to data/training_info_single.json")
         except Exception as e:
             print(f"Warning: Could not save data: {e}")
     
