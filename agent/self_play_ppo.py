@@ -133,15 +133,10 @@ class SelfPlayPPO(PPO):
             self.optimizer.param_groups[0]["lr"] = new_lr
             
             # log std annealing
-            start_log_std = -0.5
-            end_log_std = -1.6
+            start_log_std = -0.3
+            end_log_std = -1.1
             current_log_std = frac * start_log_std + (1 - frac) * end_log_std
             self.agent.log_std.data.fill_(current_log_std)
-            
-            # speed reward annealing
-            speed_weight = 8.0 + (1 - frac) * 6.0 # 8-14
-            for env_idx in range(self.config["num_envs"]):
-                setattr(self.envs.envs[env_idx], 'speed_weight', speed_weight)
             
             # 2 phase loop
                 # collect experience with current policy -> rollout
@@ -183,9 +178,9 @@ class SelfPlayPPO(PPO):
                 print(f"Update {update+1}/{NUM_UPDATES} | Step {global_step} | No episodes completed this rollout")
                 
         try:
-            with open("data/training_info_self_play_final.json", 'w') as f:
+            with open("data/training_info_self_play_3.json", 'w') as f:
                 json.dump(training_info, f)
-            print("\nTraining data saved to data/training_info_self_play_final.json")
+            print("\nTraining data saved to data/training_info_self_play.json")
         except Exception as e:
             print(f"Warning: Could not save data: {e}")
             

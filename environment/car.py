@@ -48,6 +48,9 @@ class Car:
         throttle -> [0.0, 1.0] for power amount
         dt -> timestep
         """
+        if self.crashed:
+            return
+        
         angular_velocity = steering * Car.STEERING_SPEED
         self.angle = self.angle + (angular_velocity * dt)
         self.angle = self.angle % (2 * np.pi) # keep in [0, 2π]
