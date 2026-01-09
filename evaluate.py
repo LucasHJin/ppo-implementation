@@ -3,16 +3,16 @@ import numpy as np
 import json
 from pathlib import Path
 from stable_baselines3 import PPO as SB3_PPO
-from utils.visualization import visualize_single_agent, visualize_multi_agent, visualize_sb3_agent
-from utils.metrics import eval_single_agent, eval_multi_agent, eval_sb3_agent, display_comparison
+from utils.visualization import visualize_single_agent, visualize_multi_agent, visualize_sb3_agent, visualization_grid
+from utils.metrics import eval_single_agent, eval_multi_agent, eval_sb3_agent, display_comparison, eval_training
 from environment.track import gen_tracks
 from environment.racing_env import RacingEnv
 from environment.multi_racing_env import MultiRacingEnv
 from agent.ppo import Agent
 
-def evaluate_single_agent_overall(track_pool, track_widths, device, model, num_tracks=20, num_runs=10):
+def evaluate_single_agent_overall(track_pool, track_widths, device, model, video_path, num_tracks=20, num_runs=10):
     # load model
-    dummy_env = RacingEnv()
+    dummy_env = RacingEnv(num_sensors=11)
     agent = Agent(dummy_env.observation_space, dummy_env.action_space)
     agent.load_state_dict(torch.load(model, map_location=device))
     agent.to(device)
@@ -25,12 +25,13 @@ def evaluate_single_agent_overall(track_pool, track_widths, device, model, num_t
         
         for run_idx in range(num_runs):
             env = RacingEnv(
+                num_sensors=11,
                 track_pool=track_pool,
                 track_id=track_idx,
                 track_width=track_widths[run_idx]
             )
             if run_idx == 0 and track_idx == 0:
-                metrics = visualize_single_agent(env, agent, device, "videos/single_agent.mp4")
+                metrics = visualize_single_agent(env, agent, device, video_path)
             else:
                 metrics = eval_single_agent(env, agent, device)
             all_metrics.append(metrics)
@@ -62,7 +63,7 @@ def evaluate_single_agent_overall(track_pool, track_widths, device, model, num_t
     
     return results
 
-def evaluate_multi_agent_overall(track_pool, track_widths, device, model, num_tracks=20, num_runs=10):
+def evaluate_multi_agent_overall(track_pool, track_widths, device, model, video_path, num_tracks=20, num_runs=10):
     # load model
     dummy_env = MultiRacingEnv(num_agents=2, num_sensors=11)
     agent = Agent(dummy_env.observation_space["0"], dummy_env.action_space["0"]) # type: ignore
@@ -84,7 +85,7 @@ def evaluate_multi_agent_overall(track_pool, track_widths, device, model, num_tr
                 track_width=track_widths[run_idx]
             )
             if run_idx == 0 and track_idx == 0:
-                metrics = visualize_multi_agent(env, agent, device, "videos/multi_agent.mp4")
+                metrics = visualize_multi_agent(env, agent, device, video_path)
             else:
                 metrics = eval_multi_agent(env, agent, device)
             all_metrics.append(metrics)
@@ -116,7 +117,7 @@ def evaluate_multi_agent_overall(track_pool, track_widths, device, model, num_tr
     
     return results
 
-def evaluate_sb3_agent_overall(track_pool, track_widths, model, num_tracks=20, num_runs=10):
+def evaluate_sb3_agent_overall(track_pool, track_widths, model, video_path, num_tracks=20, num_runs=10):
     agent = SB3_PPO.load(model)
     
     all_metrics = []
@@ -125,12 +126,13 @@ def evaluate_sb3_agent_overall(track_pool, track_widths, model, num_tracks=20, n
         
         for run_idx in range(num_runs):
             env = RacingEnv(
+                num_sensors=11,
                 track_pool=track_pool,
                 track_id=track_idx,
                 track_width=track_widths[run_idx]
             )
             if run_idx == 0 and track_idx == 0:
-                metrics = visualize_sb3_agent(env, agent, "videos/sb3_baseline.mp4")
+                metrics = visualize_sb3_agent(env, agent, video_path)
             else:
                 metrics = eval_sb3_agent(env, agent)
             all_metrics.append(metrics)
@@ -165,35 +167,71 @@ def evaluate_sb3_agent_overall(track_pool, track_widths, model, num_tracks=20, n
 def eval():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # configs
-    num_tracks = 1
-    num_runs = 1
-    seed = 42
+    num_tracks = 30
+    num_runs = 5
+    seed = 33
     # generate tracks
     track_pool = gen_tracks(num_tracks=num_tracks, seed=seed)
     track_widths = [np.random.RandomState(seed + i).randint(4, 10) 
                     for i in range(num_tracks)]
     
-    #single_results = evaluate_single_agent_overall(track_pool, track_widths, device, "models/single_agent.pth", num_tracks, num_runs)
-    multi_results = evaluate_multi_agent_overall(track_pool, track_widths, device, "models/self_play_agent.pth", num_tracks, num_runs)
-    sb3_results = evaluate_sb3_agent_overall(track_pool, track_widths, "models/sb3_agent.pth", num_tracks, num_runs)
+    single_results = evaluate_single_agent_overall(track_pool, track_widths, device, "models/test.pth", "videos/single.mp4", num_tracks, num_runs)
+    multi_results = evaluate_multi_agent_overall(track_pool, track_widths, device, "models/self_play_agent_3.pth", "videos/self_play.mp4", num_tracks, num_runs)
+    sb3_results = evaluate_sb3_agent_overall(track_pool, track_widths, "models/sb3_baseline_agent", "videos/sb3.mp4", num_tracks, num_runs)
+    sb3_general_results = evaluate_sb3_agent_overall(track_pool, track_widths, "models/sb3_baseline_agent_general", "videos/sb3_general.mp4", num_tracks, num_runs)
 
     Path("results").mkdir(exist_ok=True)
-    #with open("data/single_agent_results.json", "w") as f:
-    #    json.dump(single_results, f, indent=2)
-    with open("data/multi_agent_results.json", "w") as f:
-        json.dump(multi_results, f, indent=2)
-    with open("data/sb3_agent_results.json", "w") as f:
+    with open("data/eval_info_single.json", "w") as f:
+        json.dump(single_results, f, indent=2)
+    with open("data/eval_info_sb3.json", "w") as f:
         json.dump(sb3_results, f, indent=2)
+    with open("data/eval_info_sb3_general.json", "w") as f:
+        json.dump(sb3_general_results, f, indent=2)
+    with open("data/eval_info_self_play.json", "w") as f:
+        json.dump(multi_results, f, indent=2)
+        
+    visualization_grid(
+        video_paths=[
+            "videos/single.mp4",
+            "videos/sb3.mp4",
+            "videos/sb3_general.mp4"
+            "videos/self_play.mp4",
+        ],
+        model_names=[
+            "Single",
+            "SB3 Finetuned",
+            "SB3 General"
+            "Self-Play",
+        ],
+        output_path="static/racing_grid.mp4"
+    )
     
-    print("\nResults saved to data/ directory")
+    eval_training(
+        data={
+            "Single": "data/training_info_single_2.json",
+            "SB3 Finetuned": "data/training_info_sb3.json",
+            "SB3 General": "data/training_info_sb3_general.json",
+            "Self-Play": "data/training_info_self_play_3.json",
+        },
+        output_path="static/training_eval.png"
+    )
     
-    # for the training eval
-    ROOT = Path(__file__).resolve().parent.parent
-    data = {
-        "Baseline": json.load(open(ROOT / "data" / "single_agent.json")),
-        "+ Speed": json.load(open(ROOT / "data" / "single_agent_speed.json")),
-        "+ Time": json.load(open(ROOT / "data" / "single_agent_time.json")),
-    }
+    display_comparison(
+        results_files=[
+            "data/eval_info_single.json",
+            "data/eval_info_sb3.json",
+            "data/eval_info_sb3_general.json",
+            "data/eval_info_self_play"
+        ],
+        labels=[
+            "Single",
+            "SB3 Finetuned",
+            "SB3 General"
+            "Self-Play",
+        ],
+        output_path="static/eval_comparison.png"
+    )
+    
 
 if __name__ == "__main__":
     eval()

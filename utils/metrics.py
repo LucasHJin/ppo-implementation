@@ -8,7 +8,7 @@ def normalize(vals):
     max_v = np.max(vals)
     return (vals - min_v) / (max_v - min_v)
 
-def eval_training(data):
+def eval_training(data, output_path):
     plt.figure(figsize=(12, 7))
     colors = ['blue', 'green', 'orange']
     for (name, d), color in zip(data.items(), colors):
@@ -20,7 +20,7 @@ def eval_training(data):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("learning_speed.png", dpi=300)
+    plt.savefig(output_path, dpi=300)
     plt.show()
 
 def eval_single_agent(env, agent, device, max_steps=2000):
