@@ -2,6 +2,8 @@
 
 A 'from scratch' implementation of a self-playing PPO and Gymnasium environment, compared against single-agent PPO (from scratch and SB3).
 
+Read up on it in detail in my [blog post](https://lucasjin.substack.com/p/self-playing-ppo-teaching-cars-to).
+
 ## Project Overview
 
 This project showcases a complete RL pipeline from environment design to multi-agent training, featuring:
